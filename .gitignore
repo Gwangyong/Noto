@@ -1,0 +1,39 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+
+# Xcode
+DerivedData/
+build/
+*.xcuserstate
+xcuserdata/
+*.moved-aside
+*.xccheckout
+*.xcscmblueprint
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# App artifacts
+*.app
+*.dSYM
+*.ipa
+*.xcarchive
+
+# User and machine local files
+*.swp
+*.swo
+*.tmp
+*.log
+.env
+.env.*
+!.env.example
+
+# Local design references
+DESIGN.local.md
+design-system.local.md
+디자인시스템.md
+디자인시스템.local.md
