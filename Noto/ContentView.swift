@@ -9,7 +9,10 @@ import SwiftUI
 import SwiftData
 
 struct ContentView: View {
+  // NotoApp에서 주입받은 컨테이너를 꺼내 씀
     @Environment(\.modelContext) private var modelContext
+  // @Query: 데이터베이스에게 데이터를 요청하는 명령
+  // Item 테이블의 데이터를 전부 가져오고, 데이터가 바뀌면 자동으로 갱신
     @Query private var items: [Item]
 
     var body: some View {
@@ -24,7 +27,7 @@ struct ContentView: View {
                 }
                 .onDelete(perform: deleteItems)
             }
-            .navigationSplitViewColumnWidth(min: 180, ideal: 200)
+
             .toolbar {
                 ToolbarItem {
                     Button(action: addItem) {
