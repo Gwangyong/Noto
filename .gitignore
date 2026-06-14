@@ -33,6 +33,7 @@ xcuserdata/
 !.env.example
 
 # Local design references
+AI/
 DESIGN.local.md
 design-system.local.md
 디자인시스템.md
