@@ -488,6 +488,208 @@ private struct ProgressSummaryView: View {
     }
 }
 
+private struct InlineTaskTitleEditor: NSViewRepresentable {
+    let text: String
+    @Binding var measuredHeight: CGFloat
+    let onCommit: (String) -> Void
+
+    func makeNSView(context: Context) -> TaskTitleTextView {
+        let textView = TaskTitleTextView()
+        textView.delegate = context.coordinator
+        textView.string = text
+        textView.font = NSFont(name: "IBM Plex Sans KR", size: 13)
+            ?? .systemFont(ofSize: 13, weight: .regular)
+        textView.textColor = NSColor(hex: 0x2A2823)
+        textView.insertionPointColor = NSColor(hex: 0x4A6B78)
+        textView.drawsBackground = false
+        textView.isRichText = false
+        textView.importsGraphics = false
+        textView.allowsUndo = true
+        textView.usesFindBar = false
+        textView.isAutomaticQuoteSubstitutionEnabled = false
+        textView.isAutomaticDashSubstitutionEnabled = false
+        textView.isAutomaticTextReplacementEnabled = false
+        textView.textContainerInset = .zero
+        textView.textContainer?.lineFragmentPadding = 0
+        textView.textContainer?.maximumNumberOfLines = 0
+        textView.textContainer?.lineBreakMode = .byCharWrapping
+        textView.textContainer?.widthTracksTextView = true
+        textView.isHorizontallyResizable = false
+        textView.isVerticallyResizable = true
+        textView.onCommit = { title in
+            context.coordinator.commitEditing(title)
+        }
+        textView.onHeightChange = { height in
+            context.coordinator.updateMeasuredHeight(height)
+        }
+        context.coordinator.configure(textView)
+        return textView
+    }
+
+    func updateNSView(_ nsView: TaskTitleTextView, context: Context) {
+        context.coordinator.parent = self
+        if !nsView.hasUserEditedText, nsView.string != text {
+            nsView.string = text
+        }
+        context.coordinator.configure(nsView)
+    }
+
+    static func dismantleNSView(_ nsView: TaskTitleTextView, coordinator: Coordinator) {
+        nsView.stopOutsideClickMonitoring()
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
+
+    final class Coordinator: NSObject, NSTextViewDelegate {
+        var parent: InlineTaskTitleEditor
+
+        init(parent: InlineTaskTitleEditor) {
+            self.parent = parent
+        }
+
+        func configure(_ textView: TaskTitleTextView) {
+            textView.isEditable = true
+            textView.isSelectable = true
+            textView.startOutsideClickMonitoring()
+            textView.focusForEditingIfNeeded()
+            textView.updateMeasuredHeight()
+        }
+
+        func commitEditing(_ title: String) {
+            let singleLineText = title.replacingOccurrences(of: "\n", with: " ")
+            parent.onCommit(singleLineText)
+        }
+
+        func updateMeasuredHeight(_ height: CGFloat) {
+            DispatchQueue.main.async {
+                guard abs(self.parent.measuredHeight - height) > 0.5 else { return }
+                self.parent.measuredHeight = height
+            }
+        }
+
+        func textDidChange(_ notification: Notification) {
+            guard let textView = notification.object as? NSTextView else { return }
+            (textView as? TaskTitleTextView)?.hasUserEditedText = true
+            (textView as? TaskTitleTextView)?.updateMeasuredHeight()
+        }
+
+        func textView(_ textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+            switch commandSelector {
+            case #selector(NSResponder.insertNewline(_:)),
+                 #selector(NSResponder.insertNewlineIgnoringFieldEditor(_:)):
+                if let taskTextView = textView as? TaskTitleTextView {
+                    taskTextView.finishEditing()
+                } else {
+                    commitEditing(textView.string)
+                }
+                return true
+            default:
+                return false
+            }
+        }
+    }
+}
+
+private final class TaskTitleTextView: NSTextView {
+    var onCommit: ((String) -> Void)?
+    var onHeightChange: ((CGFloat) -> Void)?
+    var hasUserEditedText = false
+    private var outsideClickMonitor: Any?
+    private var didRequestInitialFocus = false
+    private var currentMeasuredHeight: CGFloat = 18
+
+    override var intrinsicContentSize: NSSize {
+        NSSize(width: NSView.noIntrinsicMetric, height: currentMeasuredHeight)
+    }
+
+    override var acceptsFirstResponder: Bool {
+        true
+    }
+
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        updateMeasuredHeight()
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        focusForEditingIfNeeded()
+        updateMeasuredHeight()
+    }
+
+    override func keyDown(with event: NSEvent) {
+        if event.keyCode == 36 || event.keyCode == 76 {
+            finishEditing()
+            return
+        }
+        super.keyDown(with: event)
+    }
+
+    func focusForEditingIfNeeded() {
+        guard !didRequestInitialFocus else { return }
+        guard window != nil else { return }
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            guard !self.didRequestInitialFocus else { return }
+            guard self.window != nil else { return }
+            self.didRequestInitialFocus = true
+            self.window?.makeFirstResponder(self)
+            self.setSelectedRange(NSRange(location: self.string.utf16.count, length: 0))
+        }
+    }
+
+    func updateMeasuredHeight() {
+        guard bounds.width > 0, let textContainer, let layoutManager else { return }
+        textContainer.containerSize = NSSize(width: bounds.width, height: .greatestFiniteMagnitude)
+        layoutManager.ensureLayout(for: textContainer)
+
+        let usedRect = layoutManager.usedRect(for: textContainer)
+        let height = max(18, ceil(usedRect.height + textContainerInset.height * 2))
+        guard abs(currentMeasuredHeight - height) > 0.5 else { return }
+        currentMeasuredHeight = height
+        invalidateIntrinsicContentSize()
+        onHeightChange?(height)
+    }
+
+    func startOutsideClickMonitoring() {
+        guard outsideClickMonitor == nil else { return }
+        outsideClickMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
+            guard let self else { return event }
+            guard event.window === self.window else {
+                self.finishEditing()
+                return event
+            }
+
+            let eventPoint = self.convert(event.locationInWindow, from: nil)
+            if !self.bounds.contains(eventPoint) {
+                self.finishEditing()
+            }
+            return event
+        }
+    }
+
+    func stopOutsideClickMonitoring() {
+        guard let outsideClickMonitor else { return }
+        NSEvent.removeMonitor(outsideClickMonitor)
+        self.outsideClickMonitor = nil
+    }
+
+    func finishEditing() {
+        stopOutsideClickMonitoring()
+        isEditable = false
+        isSelectable = false
+        setSelectedRange(NSRange(location: 0, length: 0))
+        onCommit?(string)
+        window?.makeFirstResponder(nil)
+    }
+
+    deinit {
+        stopOutsideClickMonitoring()
+    }
+}
+
 private struct TaskRowView: View {
     let task: SampleTask
     let isEditing: Bool
@@ -497,8 +699,8 @@ private struct TaskRowView: View {
     let onCommitEdit: (String) -> Void
     let onDelete: () -> Void
 
-    @State private var draftTitle = ""
     @State private var isHovering = false
+    @State private var draftTitleHeight: CGFloat = 18
 
     private var showsActions: Bool {
         isHovering || isEditing || isDeleting
@@ -523,15 +725,12 @@ private struct TaskRowView: View {
             .buttonStyle(.plain)
 
             if isEditing {
-                TextField("", text: $draftTitle)
-                    .font(DesignTokens.Typography.body)
-                    .foregroundStyle(DesignTokens.Colors.textPrimary)
-                    .textFieldStyle(.plain)
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .onSubmit {
-                        onCommitEdit(draftTitle)
-                    }
+                InlineTaskTitleEditor(text: task.title, measuredHeight: $draftTitleHeight) { title in
+                    onCommitEdit(title)
+                }
+                .frame(height: draftTitleHeight, alignment: .center)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
                     .overlay(alignment: .bottom) {
                         Rectangle()
                             .fill(DesignTokens.Colors.primary)
@@ -548,6 +747,11 @@ private struct TaskRowView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .layoutPriority(1)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        guard !task.isDone else { return }
+                        onEdit()
+                    }
             }
 
             HStack(spacing: 4) {
@@ -569,12 +773,9 @@ private struct TaskRowView: View {
         .background(rowBackground)
         .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.lg, style: .continuous))
         .onHover { isHovering = $0 }
-        .onAppear {
-            draftTitle = task.title
-        }
         .onChange(of: isEditing) { _, newValue in
             if newValue {
-                draftTitle = task.title
+                draftTitleHeight = 18
             }
         }
     }
