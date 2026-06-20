@@ -188,7 +188,9 @@ struct FloatingRootView: View {
     }
 
     private func contentFrame(characterFrame: CGRect, panelFrame: CGRect?) -> CGRect {
-        let padding: CGFloat = 10
+        let padding = panelFrame == nil && viewModel.remainingCount > 0
+            ? DesignTokens.Size.floatingBadgeContentPadding
+            : DesignTokens.Size.floatingContentPadding
         let unionFrame = panelFrame.map { characterFrame.union($0) } ?? characterFrame
 
         return unionFrame

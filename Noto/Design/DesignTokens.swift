@@ -113,6 +113,8 @@ enum DesignTokens {
         static let placementPanelHeight: CGFloat = 432
         static let characterSize: CGFloat = 58
         static let characterFloatOffset: CGFloat = 5
+        static let floatingContentPadding: CGFloat = 10
+        static let floatingBadgeContentPadding: CGFloat = 14
         static let panelGap: CGFloat = 12
         static let screenClampPadding: CGFloat = 12
         static let desktopMenuBarInset: CGFloat = 30
