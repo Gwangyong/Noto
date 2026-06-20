@@ -1382,7 +1382,7 @@ private struct SettingsPanelView: View {
             ScrollView(.vertical, showsIndicators: true) {
                 VStack(spacing: 0) {
                     VStack(spacing: 0) {
-                        SettingsToggleRow(title: "시동 시 실행", subtitle: "노트북이 켜질 때마다 자동으로 실행돼요!", isOn: settings.launchAtLogin, action: onToggleLogin)
+                        SettingsToggleRow(title: "시동 시 실행", subtitle: "노트북이 켜질 때마다 자동으로 실행돼요.", isOn: settings.launchAtLogin, action: onToggleLogin)
                         SettingsDivider()
                         SettingsToggleRow(title: "항상 위에 표시", subtitle: "언제나 다른 창에 가려지지 않아요!", isOn: settings.keepOnTop, action: onToggleOnTop)
                         SettingsDivider()
@@ -1555,7 +1555,7 @@ private struct ShortcutSettingRow: View {
                         .font(DesignTokens.Typography.sans(size: 13, weight: .semibold))
                         .foregroundStyle(DesignTokens.Colors.textPrimary)
 
-                    Text("단축키로 패널을 열고 닫아요.")
+                    Text("패널 호출 단축키예요.")
                         .font(DesignTokens.Typography.sans(size: 11, weight: .regular))
                         .foregroundStyle(DesignTokens.Colors.labelMuted)
                         .lineLimit(1)
