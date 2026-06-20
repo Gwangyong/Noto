@@ -322,6 +322,7 @@ private struct InlineGoalTextView: NSViewRepresentable {
 
     final class Coordinator: NSObject, NSTextViewDelegate {
         var parent: InlineGoalTextView
+        private var isCommitting = false
 
         init(parent: InlineGoalTextView) {
             self.parent = parent
@@ -345,7 +346,7 @@ private struct InlineGoalTextView: NSViewRepresentable {
         }
 
         func beginEditing(_ textView: GoalTextView, event: NSEvent) {
-            parent.isEditing = true
+            isCommitting = false
             textView.isEditingMode = true
             textView.isEditable = true
             textView.isSelectable = true
@@ -355,23 +356,38 @@ private struct InlineGoalTextView: NSViewRepresentable {
             let clickPoint = textView.convert(event.locationInWindow, from: nil)
             let insertionIndex = min(textView.characterIndexForInsertion(at: clickPoint), textView.string.utf16.count)
             textView.setSelectedRange(NSRange(location: insertionIndex, length: 0))
+
+            updateBindingState { [weak self] in
+                self?.parent.isEditing = true
+            }
         }
 
         func commitEditing() {
-            parent.isEditing = false
-            parent.onCommit()
+            guard !isCommitting else { return }
+            isCommitting = true
+
+            updateBindingState { [weak self] in
+                guard let self else { return }
+                self.parent.isEditing = false
+                self.parent.onCommit()
+            }
         }
 
         func textDidChange(_ notification: Notification) {
             guard let textView = notification.object as? NSTextView else { return }
             let singleLineText = textView.string.replacingOccurrences(of: "\n", with: " ")
             if parent.text != singleLineText {
-                parent.text = singleLineText
+                updateBindingState { [weak self] in
+                    guard let self, self.parent.text != singleLineText else { return }
+                    self.parent.text = singleLineText
+                }
             }
         }
 
         func textDidEndEditing(_ notification: Notification) {
-            parent.isEditing = false
+            updateBindingState { [weak self] in
+                self?.parent.isEditing = false
+            }
         }
 
         func textView(_ textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
@@ -383,6 +399,10 @@ private struct InlineGoalTextView: NSViewRepresentable {
             default:
                 return false
             }
+        }
+
+        private func updateBindingState(_ update: @escaping () -> Void) {
+            DispatchQueue.main.async(execute: update)
         }
     }
 }
