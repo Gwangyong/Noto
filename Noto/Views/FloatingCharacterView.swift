@@ -14,7 +14,7 @@ struct FloatingCharacterView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var showsBadge: Bool {
-        !isActive && remainingCount > 0
+        !isActive
     }
 
     var body: some View {
