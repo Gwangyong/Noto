@@ -20,7 +20,7 @@ final class FloatingPanelController {
 
         let rootView = FloatingRootView()
             .modelContainer(modelContainer)
-        let hostingController = NSHostingController(rootView: rootView)
+        let hostingView = FirstMouseHostingView(rootView: rootView)
         let visibleFrame = NSScreen.main?.visibleFrame ?? CGRect(x: 0, y: 0, width: 420, height: 488)
         let initialFrame = CGRect(
             x: visibleFrame.midX - 210,
@@ -35,7 +35,7 @@ final class FloatingPanelController {
             defer: false
         )
 
-        panel.contentViewController = hostingController
+        panel.contentView = hostingView
         panel.title = ""
         panel.isReleasedWhenClosed = false
         panel.hidesOnDeactivate = false
@@ -81,6 +81,12 @@ struct FloatingPanelLauncher: View {
     private func hideBootstrapWindow(_ window: NSWindow) {
         window.setFrame(CGRect(x: -10_000, y: -10_000, width: 1, height: 1), display: false)
         window.orderOut(nil)
+    }
+}
+
+private final class FirstMouseHostingView<Content: View>: NSHostingView<Content> {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        true
     }
 }
 
