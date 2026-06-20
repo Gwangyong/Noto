@@ -3,13 +3,16 @@
 //  Noto
 //
 
+import SwiftData
 import SwiftUI
 
 struct FloatingRootView: View {
+    @Environment(\.modelContext) private var modelContext
     @StateObject private var viewModel = TaskPanelViewModel.sample()
     @State private var isPanelOpen = true
     @State private var characterOrigin = CGPoint(x: 72, y: 74)
     @State private var dragStartOrigin: CGPoint?
+    @State private var didLoadPersistedState = false
     @GestureState private var isPressing = false
 
     var body: some View {
@@ -61,6 +64,7 @@ struct FloatingRootView: View {
             }
             .preferredColorScheme(viewModel.settings.theme.preferredColorScheme)
             .onAppear {
+                configurePersistenceIfNeeded()
                 characterOrigin = PanelPlacementResolver.clampedCharacterOrigin(
                     characterOrigin,
                     visibleScreenFrame: visibleFrame
@@ -80,6 +84,34 @@ struct FloatingRootView: View {
     private var desktopBackground: some View {
         Color(nsColor: .windowBackgroundColor)
             .ignoresSafeArea()
+    }
+
+    private func configurePersistenceIfNeeded() {
+        guard !didLoadPersistedState else { return }
+
+        let store = TaskPanelStore(modelContext: modelContext)
+
+        do {
+            let snapshot = try store.loadOrSeed(default: viewModel.snapshot)
+            viewModel.applySnapshot(snapshot)
+        } catch {
+            logPersistenceError("load", error)
+        }
+
+        viewModel.onSnapshotChange = { snapshot in
+            do {
+                try store.save(snapshot)
+            } catch {
+                logPersistenceError("save", error)
+            }
+        }
+        didLoadPersistedState = true
+    }
+
+    private func logPersistenceError(_ operation: String, _ error: Error) {
+        #if DEBUG
+        print("Noto persistence \(operation) failed: \(error)")
+        #endif
     }
 
     private func characterGesture(in visibleFrame: CGRect) -> some Gesture {
