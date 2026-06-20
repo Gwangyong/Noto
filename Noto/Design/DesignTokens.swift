@@ -31,6 +31,7 @@ enum DesignTokens {
 
         static let destructive = Color(hex: 0xB0573F)
         static let destructiveHover = Color(hex: 0x9C4A34)
+        static let rating = Color(hex: 0xD99A1D)
 
         static let divider = Color(hex: 0x2A2823, opacity: 0.07)
         static let hairline = Color(hex: 0x2A2823, opacity: 0.08)

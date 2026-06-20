@@ -1229,61 +1229,85 @@ private struct SettingsPanelView: View {
             Divider()
                 .overlay(DesignTokens.Colors.divider)
                 .padding(.horizontal, 14)
-                .padding(.bottom, 4)
 
-            VStack(spacing: 0) {
-                SettingsToggleRow(title: "로그인 시 실행", subtitle: "Launch at login", isOn: settings.launchAtLogin, action: onToggleLogin)
-                SettingsDivider()
-                SettingsToggleRow(title: "항상 위에 표시", subtitle: "Always on top", isOn: settings.keepOnTop, action: onToggleOnTop)
-                SettingsDivider()
-                SettingsToggleRow(title: "완료 효과음", subtitle: "Completion sound", isOn: settings.completionSound, action: onToggleSound)
-            }
-            .padding(.horizontal, DesignTokens.Spacing.lg)
+            ScrollView(.vertical, showsIndicators: true) {
+                VStack(spacing: 0) {
+                    VStack(spacing: 0) {
+                        SettingsToggleRow(title: "시동 시 실행", subtitle: "노트북이 켜질 때마다 자동으로 실행돼요!", isOn: settings.launchAtLogin, action: onToggleLogin)
+                        SettingsDivider()
+                        SettingsToggleRow(title: "항상 위에 표시", subtitle: "언제나 다른 창에 가려지지 않아요!", isOn: settings.keepOnTop, action: onToggleOnTop)
+                        SettingsDivider()
+                        SettingsToggleRow(title: "완료 효과음", isOn: settings.completionSound, action: onToggleSound)
+                    }
 
-            ThemePickerRow(selectedTheme: settings.theme, onTheme: onTheme)
+                    ThemePickerRow(selectedTheme: settings.theme, onTheme: onTheme)
+                        .padding(.top, 8)
+
+                    ShortcutSettingRow(action: {})
+                        .padding(.top, 13)
+
+                    SupportSectionView(
+                        onFeedback: {},
+                        onShare: {},
+                        onRate: {}
+                    )
+                    .padding(.top, 17)
+
+                    HStack {
+                        Spacer()
+                        Text("version 1.0.0")
+                    }
+                    .font(DesignTokens.Typography.settingsMeta)
+                    .foregroundStyle(DesignTokens.Colors.textMuted)
+                    .padding(.top, 20)
+                    .padding(.bottom, 16)
+                }
                 .padding(.horizontal, DesignTokens.Spacing.lg)
-                .padding(.top, 8)
-
-            Spacer(minLength: 12)
-
-            HStack {
-                Spacer()
-                Text("version 1.0.0")
+                .padding(.top, 4)
             }
-            .font(DesignTokens.Typography.settingsMeta)
-            .foregroundStyle(DesignTokens.Colors.textMuted)
-            .padding(.horizontal, DesignTokens.Spacing.lg)
-            .padding(.bottom, 16)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 }
 
 private struct SettingsToggleRow: View {
     let title: String
-    let subtitle: String
+    let subtitle: String?
     let isOn: Bool
     let action: () -> Void
 
-    var body: some View {
-        Button(action: action) {
-            HStack {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(title)
-                        .font(DesignTokens.Typography.sans(size: 13, weight: .medium))
-                        .foregroundStyle(DesignTokens.Colors.textPrimary)
+    init(title: String, subtitle: String? = nil, isOn: Bool, action: @escaping () -> Void) {
+        self.title = title
+        self.subtitle = subtitle
+        self.isOn = isOn
+        self.action = action
+    }
 
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(DesignTokens.Typography.sans(size: 13, weight: .medium))
+                    .foregroundStyle(DesignTokens.Colors.textPrimary)
+
+                if let subtitle, !subtitle.isEmpty {
                     Text(subtitle)
                         .font(DesignTokens.Typography.sans(size: 11, weight: .regular))
                         .foregroundStyle(DesignTokens.Colors.labelMuted)
                 }
+            }
 
-                Spacer()
+            Spacer()
 
+            Button(action: action) {
                 NotoSwitch(isOn: isOn)
             }
-            .padding(.vertical, 9)
+            .buttonStyle(.plain)
+            .contentShape(Rectangle())
+            .accessibilityLabel(title)
+            .accessibilityValue(isOn ? "켜짐" : "꺼짐")
         }
-        .buttonStyle(.plain)
+        .padding(.vertical, subtitle == nil ? 14 : 9)
     }
 }
 
@@ -1360,6 +1384,124 @@ private struct ThemePickerRow: View {
                     .fill(Color.clear)
             }
         }
+    }
+}
+
+private struct ShortcutSettingRow: View {
+    let action: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            SettingsSectionLabel(title: "단축키", meta: "HOTKEY")
+
+            HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("핫키 변경")
+                        .font(DesignTokens.Typography.sans(size: 13, weight: .semibold))
+                        .foregroundStyle(DesignTokens.Colors.textPrimary)
+
+                    Text("단축키로 패널을 열고 닫아요.")
+                        .font(DesignTokens.Typography.sans(size: 11, weight: .regular))
+                        .foregroundStyle(DesignTokens.Colors.labelMuted)
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 8)
+
+                Button(action: action) {
+                    Text("⌥ Space")
+                        .font(DesignTokens.Typography.sans(size: 12, weight: .semibold))
+                        .foregroundStyle(DesignTokens.Colors.primaryDeep)
+                        .frame(width: 88, height: 30)
+                        .background(
+                            RoundedRectangle(cornerRadius: DesignTokens.Radius.md, style: .continuous)
+                                .fill(Color.white.opacity(0.72))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: DesignTokens.Radius.md, style: .continuous)
+                                .stroke(DesignTokens.Colors.hairline.opacity(0.85), lineWidth: 0.7)
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.vertical, 3)
+        }
+    }
+}
+
+private struct SupportSectionView: View {
+    let onFeedback: () -> Void
+    let onShare: () -> Void
+    let onRate: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 11) {
+            SettingsDivider()
+
+            SettingsSectionLabel(title: "지원", meta: "SUPPORT")
+                .padding(.top, 6)
+
+            SupportActionRow(title: "문의 및 피드백", systemName: "arrow.up.right.square", action: onFeedback)
+            SupportActionRow(title: "앱 공유하기", systemName: "square.and.arrow.up", action: onShare)
+            SupportActionRow(title: "별점 선물하기", action: onRate) {
+                HStack(spacing: 3) {
+                    ForEach(0..<5, id: \.self) { _ in
+                        Image(systemName: "star.fill")
+                            .font(.system(size: 9, weight: .semibold))
+                    }
+                }
+                .foregroundStyle(DesignTokens.Colors.rating)
+            }
+        }
+    }
+}
+
+private struct SettingsSectionLabel: View {
+    let title: String
+    let meta: String
+
+    var body: some View {
+        Text("\(title)  ·  \(meta)")
+            .font(DesignTokens.Typography.labelMono)
+            .foregroundStyle(DesignTokens.Colors.labelMuted)
+    }
+}
+
+private struct SupportActionRow<Trailing: View>: View {
+    let title: String
+    let action: () -> Void
+    let trailing: Trailing
+
+    init(title: String, systemName: String, action: @escaping () -> Void) where Trailing == Image {
+        self.title = title
+        self.action = action
+        self.trailing = Image(systemName: systemName)
+    }
+
+    init(title: String, action: @escaping () -> Void, @ViewBuilder trailing: () -> Trailing) {
+        self.title = title
+        self.action = action
+        self.trailing = trailing()
+    }
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Text(title)
+                    .font(DesignTokens.Typography.sans(size: 13, weight: .semibold))
+                    .foregroundStyle(DesignTokens.Colors.textPrimary)
+
+                Spacer(minLength: 12)
+
+                trailing
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(DesignTokens.Colors.textTertiary)
+                    .frame(minWidth: 50, alignment: .trailing)
+            }
+            .frame(minHeight: 26)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }
 
