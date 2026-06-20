@@ -10,7 +10,9 @@ import SwiftUI
 struct FloatingRootView: View {
     @Environment(\.modelContext) private var modelContext
     @StateObject private var viewModel = TaskPanelViewModel.sample()
+    @StateObject private var hotKeyService = GlobalHotKeyService()
     @State private var isPanelOpen = true
+    @State private var isRecordingHotKey = false
     @State private var characterScreenOrigin = CGPoint(x: 72, y: 74)
     @State private var characterLocalOrigin = CGPoint(x: 28, y: 28)
     @State private var panelLocalOrigin = CGPoint(x: 98, y: 28)
@@ -29,17 +31,16 @@ struct FloatingRootView: View {
             if isPanelOpen {
                 TaskPanelView(
                     viewModel: viewModel,
-                    onCollapse: {
-                        withAnimation(.easeOut(duration: DesignTokens.Motion.panelOpenDuration)) {
-                            isPanelOpen = false
-                        }
+                    onCollapse: { setPanelOpen(false) },
+                    onHotKeyRecordingChange: { isRecording in
+                        isRecordingHotKey = isRecording
+                        updateGlobalHotKeyRegistration()
                     }
                 )
                 .position(
                     x: panelLocalOrigin.x + DesignTokens.Size.panelWidth / 2,
                     y: panelLocalOrigin.y + currentPanelHeight / 2
                 )
-                .transition(.opacity.combined(with: .scale(scale: DesignTokens.Motion.panelOpenInitialScale)))
                 .zIndex(1)
             }
 
@@ -75,17 +76,32 @@ struct FloatingRootView: View {
         .onAppear {
             configurePersistenceIfNeeded()
             updateFloatingWindowLayout()
+            updateGlobalHotKeyRegistration()
         }
         .onChange(of: isPanelOpen) { _, _ in
-            updateFloatingWindowLayout(animated: true)
+            withoutAnimation {
+                updateFloatingWindowLayout(animated: false)
+            }
         }
         .onChange(of: viewModel.screen) { _, _ in
-            updateFloatingWindowLayout(animated: true)
+            withoutAnimation {
+                updateFloatingWindowLayout(animated: false)
+            }
         }
         .onChange(of: viewModel.settings.keepOnTop) { _, _ in
             if let floatingWindow {
                 updateFloatingWindowLevel(floatingWindow)
+                bringFloatingWindowForward()
             }
+        }
+        .onChange(of: viewModel.settings.hotKey) { _, _ in
+            updateGlobalHotKeyRegistration()
+        }
+        .onChange(of: isRecordingHotKey) { _, _ in
+            updateGlobalHotKeyRegistration()
+        }
+        .onDisappear {
+            hotKeyService.unregister()
         }
     }
 
@@ -130,7 +146,35 @@ struct FloatingRootView: View {
     }
 
     private func updateFloatingWindowLevel(_ window: NSWindow) {
-        window.level = viewModel.settings.keepOnTop ? .floating : NSWindow.Level(rawValue: 0)
+        window.level = viewModel.settings.keepOnTop ? .floating : .normal
+    }
+
+    private func updateGlobalHotKeyRegistration() {
+        guard !isRecordingHotKey else {
+            hotKeyService.unregister()
+            return
+        }
+
+        hotKeyService.register(viewModel.settings.hotKey) {
+            handleHotKeyTrigger()
+        }
+    }
+
+    private func bringFloatingWindowForward(activateApp: Bool = false) {
+        guard let floatingWindow else { return }
+
+        updateFloatingWindowLevel(floatingWindow)
+        if activateApp {
+            NSApp.activate(ignoringOtherApps: true)
+        }
+        floatingWindow.orderFrontRegardless()
+        floatingWindow.makeKey()
+    }
+
+    private func withoutAnimation(_ updates: () -> Void) {
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction, updates)
     }
 
     private func updateFloatingWindowLayout(animated: Bool = false) {
@@ -231,10 +275,36 @@ struct FloatingRootView: View {
     }
 
     private func togglePanel() {
-        withAnimation(.easeOut(duration: DesignTokens.Motion.panelOpenDuration)) {
-            isPanelOpen.toggle()
+        setPanelOpen(!isPanelOpen, activateAppWhenOpening: true)
+    }
+
+    private func handleHotKeyTrigger() {
+        if isPanelOpen,
+           !viewModel.settings.keepOnTop,
+           NSApp.isActive == false || floatingWindow?.isKeyWindow == false {
+            bringFloatingWindowForward(activateApp: true)
+            updateFloatingWindowLayout(animated: false)
+            return
         }
-        updateFloatingWindowLayout(animated: true)
+
+        togglePanel()
+    }
+
+    private func setPanelOpen(_ isOpen: Bool, activateAppWhenOpening: Bool = false) {
+        let shouldActivate = activateAppWhenOpening && isOpen
+        bringFloatingWindowForward(activateApp: shouldActivate)
+
+        guard isPanelOpen != isOpen else {
+            withoutAnimation {
+                updateFloatingWindowLayout(animated: false)
+            }
+            return
+        }
+
+        withoutAnimation {
+            isPanelOpen = isOpen
+            updateFloatingWindowLayout(animated: false)
+        }
     }
 
     private func characterDragGesture() -> some Gesture {
@@ -282,7 +352,7 @@ struct FloatingRootView: View {
                     togglePanel()
                 } else {
                     persistCharacterPosition()
-                    updateFloatingWindowLayout(animated: true)
+                    updateFloatingWindowLayout(animated: false)
                 }
             }
     }

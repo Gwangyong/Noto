@@ -14,10 +14,12 @@ private enum TaskPanelFocusField: Hashable {
 struct TaskPanelView: View {
     @ObservedObject var viewModel: TaskPanelViewModel
     let onCollapse: () -> Void
+    let onHotKeyRecordingChange: (Bool) -> Void
 
     @FocusState private var focusedField: TaskPanelFocusField?
     @State private var isEditingGoal = false
     @State private var draggingTaskID: SampleTask.ID?
+    @State private var isRecordingHotKey = false
 
     private var panelHeight: CGFloat {
         viewModel.screen == .settings
@@ -57,6 +59,13 @@ struct TaskPanelView: View {
         }
         .animation(.easeOut(duration: DesignTokens.Motion.panelOpenDuration), value: viewModel.screen)
         .animation(.easeOut(duration: DesignTokens.Motion.modalOpenDuration), value: viewModel.showingDeleteAllConfirm)
+        .onChange(of: viewModel.screen) { _, screen in
+            guard screen != .settings else { return }
+            setHotKeyRecording(false)
+        }
+        .onDisappear {
+            setHotKeyRecording(false)
+        }
     }
 
     private var listPanel: some View {
@@ -162,8 +171,19 @@ struct TaskPanelView: View {
             onToggleLogin: viewModel.toggleLaunchAtLogin,
             onToggleOnTop: viewModel.toggleKeepOnTop,
             onToggleSound: viewModel.toggleCompletionSound,
-            onTheme: viewModel.setTheme
+            onTheme: viewModel.setTheme,
+            isRecordingHotKey: Binding(
+                get: { isRecordingHotKey },
+                set: { setHotKeyRecording($0) }
+            ),
+            onHotKey: viewModel.setHotKey
         )
+    }
+
+    private func setHotKeyRecording(_ isRecording: Bool) {
+        guard isRecordingHotKey != isRecording else { return }
+        isRecordingHotKey = isRecording
+        onHotKeyRecordingChange(isRecording)
     }
 
     private var panelSurface: some View {
@@ -1329,6 +1349,8 @@ private struct SettingsPanelView: View {
     let onToggleOnTop: () -> Void
     let onToggleSound: () -> Void
     let onTheme: (TaskPanelSettings.Theme) -> Void
+    @Binding var isRecordingHotKey: Bool
+    let onHotKey: (TaskPanelHotKey) -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -1370,7 +1392,11 @@ private struct SettingsPanelView: View {
                     ThemePickerRow(selectedTheme: settings.theme, onTheme: onTheme)
                         .padding(.top, 8)
 
-                    ShortcutSettingRow(action: {})
+                    ShortcutSettingRow(
+                        hotKey: settings.hotKey,
+                        isRecording: $isRecordingHotKey,
+                        onHotKey: onHotKey
+                    )
                         .padding(.top, 13)
 
                     SupportSectionView(
@@ -1515,7 +1541,9 @@ private struct ThemePickerRow: View {
 }
 
 private struct ShortcutSettingRow: View {
-    let action: () -> Void
+    let hotKey: TaskPanelHotKey
+    @Binding var isRecording: Bool
+    let onHotKey: (TaskPanelHotKey) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
@@ -1535,24 +1563,130 @@ private struct ShortcutSettingRow: View {
 
                 Spacer(minLength: 8)
 
-                Button(action: action) {
-                    Text("⌥ Space")
+                Button {
+                    isRecording = true
+                } label: {
+                    Text(isRecording ? "입력 중..." : hotKey.displayText)
                         .font(DesignTokens.Typography.sans(size: 12, weight: .semibold))
-                        .foregroundStyle(DesignTokens.Colors.primaryDeep)
-                        .frame(width: 88, height: 30)
+                        .foregroundStyle(isRecording ? DesignTokens.Colors.destructive : DesignTokens.Colors.primaryDeep)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.82)
+                        .frame(minWidth: 88)
+                        .frame(height: 30)
+                        .padding(.horizontal, 8)
                         .background(
                             RoundedRectangle(cornerRadius: DesignTokens.Radius.md, style: .continuous)
-                                .fill(DesignTokens.Colors.keyCapSurface)
+                                .fill(isRecording ? DesignTokens.Colors.rowDeleteSurface : DesignTokens.Colors.keyCapSurface)
                         )
                         .overlay(
                             RoundedRectangle(cornerRadius: DesignTokens.Radius.md, style: .continuous)
-                                .stroke(DesignTokens.Colors.hairline.opacity(0.85), lineWidth: 0.7)
+                                .stroke(
+                                    isRecording ? DesignTokens.Colors.destructive.opacity(0.55) : DesignTokens.Colors.hairline.opacity(0.85),
+                                    lineWidth: 0.7
+                                )
                         )
                 }
                 .buttonStyle(.plain)
+                .background(
+                    HotKeyRecorderView(
+                        isRecording: $isRecording,
+                        onCapture: { nextHotKey in
+                            onHotKey(nextHotKey)
+                            isRecording = false
+                        },
+                        onCancel: {
+                            isRecording = false
+                        }
+                    )
+                    .frame(width: 0, height: 0)
+                )
             }
             .padding(.vertical, 3)
         }
+    }
+}
+
+private struct HotKeyRecorderView: NSViewRepresentable {
+    @Binding var isRecording: Bool
+    let onCapture: (TaskPanelHotKey) -> Void
+    let onCancel: () -> Void
+
+    func makeNSView(context: Context) -> HotKeyRecorderNSView {
+        let view = HotKeyRecorderNSView()
+        view.onCapture = onCapture
+        view.onCancel = onCancel
+        view.configure(isRecording: isRecording)
+        return view
+    }
+
+    func updateNSView(_ nsView: HotKeyRecorderNSView, context: Context) {
+        nsView.onCapture = onCapture
+        nsView.onCancel = onCancel
+        nsView.configure(isRecording: isRecording)
+    }
+
+    static func dismantleNSView(_ nsView: HotKeyRecorderNSView, coordinator: ()) {
+        nsView.configure(isRecording: false)
+    }
+}
+
+private final class HotKeyRecorderNSView: NSView {
+    var onCapture: ((TaskPanelHotKey) -> Void)?
+    var onCancel: (() -> Void)?
+
+    private var isRecording = false
+    private var keyMonitor: Any?
+
+    override var acceptsFirstResponder: Bool {
+        true
+    }
+
+    func configure(isRecording: Bool) {
+        guard self.isRecording != isRecording else { return }
+        self.isRecording = isRecording
+
+        if isRecording {
+            startMonitoring()
+        } else {
+            stopMonitoring()
+        }
+    }
+
+    private func startMonitoring() {
+        guard keyMonitor == nil else { return }
+        window?.makeFirstResponder(self)
+
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self, self.isRecording else { return event }
+
+            if event.keyCode == 53 {
+                self.onCancel?()
+                return nil
+            }
+
+            guard let hotKey = TaskPanelHotKey(event: event) else {
+                NSSound.beep()
+                return nil
+            }
+
+            self.onCapture?(hotKey)
+            return nil
+        }
+    }
+
+    private func stopMonitoring() {
+        if let keyMonitor {
+            NSEvent.removeMonitor(keyMonitor)
+        }
+
+        keyMonitor = nil
+        if window?.firstResponder === self {
+            window?.makeFirstResponder(nil)
+        }
+    }
+
+    deinit {
+        stopMonitoring()
     }
 }
 
@@ -1633,7 +1767,7 @@ private struct SupportActionRow<Trailing: View>: View {
 }
 
 #Preview {
-    TaskPanelView(viewModel: .sample(), onCollapse: {})
+    TaskPanelView(viewModel: .sample(), onCollapse: {}, onHotKeyRecordingChange: { _ in })
         .padding(40)
         .background(DesignTokens.Colors.documentBackground)
 }

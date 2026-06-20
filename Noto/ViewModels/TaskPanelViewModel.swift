@@ -70,7 +70,8 @@ final class TaskPanelViewModel: ObservableObject {
                 launchAtLogin: true,
                 keepOnTop: true,
                 completionSound: false,
-                theme: .system
+                theme: .system,
+                hotKey: .default
             )
         )
     }
@@ -210,6 +211,12 @@ final class TaskPanelViewModel: ObservableObject {
     func setTheme(_ theme: TaskPanelSettings.Theme) {
         guard settings.theme != theme else { return }
         settings.theme = theme
+        persistSnapshot()
+    }
+
+    func setHotKey(_ hotKey: TaskPanelHotKey) {
+        guard settings.hotKey != hotKey else { return }
+        settings.hotKey = hotKey
         persistSnapshot()
     }
 }

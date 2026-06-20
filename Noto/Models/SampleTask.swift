@@ -28,6 +28,7 @@ struct TaskPanelSettings: Equatable {
     var keepOnTop: Bool
     var completionSound: Bool
     var theme: Theme
+    var hotKey: TaskPanelHotKey
 
     enum Theme: String, CaseIterable, Identifiable {
         case system = "시스템"

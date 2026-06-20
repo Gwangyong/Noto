@@ -39,7 +39,8 @@ final class TaskPanelStore {
                 launchAtLogin: preference.launchAtLogin,
                 keepOnTop: preference.keepOnTop,
                 completionSound: preference.completionSound,
-                theme: preference.theme
+                theme: preference.theme,
+                hotKey: preference.hotKey
             )
         )
     }
@@ -54,6 +55,7 @@ final class TaskPanelStore {
         preference.keepOnTop = snapshot.settings.keepOnTop
         preference.completionSound = snapshot.settings.completionSound
         preference.theme = snapshot.settings.theme
+        preference.hotKey = snapshot.settings.hotKey
         preference.updatedAt = .now
 
         try saveTasks(snapshot.tasks)
@@ -121,7 +123,8 @@ final class TaskPanelStore {
             launchAtLogin: settings.launchAtLogin,
             keepOnTop: settings.keepOnTop,
             completionSound: settings.completionSound,
-            theme: settings.theme
+            theme: settings.theme,
+            hotKey: settings.hotKey
         )
         modelContext.insert(preference)
         return preference

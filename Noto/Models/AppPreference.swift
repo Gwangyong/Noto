@@ -13,6 +13,8 @@ final class AppPreference {
     var keepOnTop: Bool
     var completionSound: Bool
     var themeRawValue: String
+    var hotKeyKeyCode: Int?
+    var hotKeyModifiers: Int?
     var characterOriginX: Double?
     var characterOriginY: Double?
     var updatedAt: Date
@@ -23,6 +25,7 @@ final class AppPreference {
         keepOnTop: Bool = true,
         completionSound: Bool = false,
         theme: TaskPanelSettings.Theme = .system,
+        hotKey: TaskPanelHotKey = .default,
         characterOriginX: Double? = nil,
         characterOriginY: Double? = nil,
         updatedAt: Date = .now
@@ -32,6 +35,8 @@ final class AppPreference {
         self.keepOnTop = keepOnTop
         self.completionSound = completionSound
         self.themeRawValue = theme.rawValue
+        self.hotKeyKeyCode = hotKey.keyCodeValue
+        self.hotKeyModifiers = hotKey.modifierValue
         self.characterOriginX = characterOriginX
         self.characterOriginY = characterOriginY
         self.updatedAt = updatedAt
@@ -43,6 +48,17 @@ final class AppPreference {
         }
         set {
             themeRawValue = newValue.rawValue
+            updatedAt = .now
+        }
+    }
+
+    var hotKey: TaskPanelHotKey {
+        get {
+            TaskPanelHotKey(keyCodeValue: hotKeyKeyCode, modifierValue: hotKeyModifiers) ?? .default
+        }
+        set {
+            hotKeyKeyCode = newValue.keyCodeValue
+            hotKeyModifiers = newValue.modifierValue
             updatedAt = .now
         }
     }
