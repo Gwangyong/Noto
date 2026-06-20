@@ -3,56 +3,71 @@
 //  Noto
 //
 
+import AppKit
 import SwiftUI
 
 enum DesignTokens {
     enum Colors {
-        static let panelSurface = Color(hex: 0xF9F7F2)
-        static let panelSurfaceGlass = Color(hex: 0xF9F7F2, opacity: 0.92)
+        static let panelSurface = Color(light: 0xF9F7F2, dark: 0x201F1C)
+        static let panelSurfaceGlass = Color(light: 0xF9F7F2, dark: 0x201F1C, lightOpacity: 0.92, darkOpacity: 0.94)
 
-        static let characterTop = Color(hex: 0xFFFEFB)
-        static let characterMid = Color(hex: 0xF4F0E7)
-        static let characterBottom = Color(hex: 0xECE5D8)
+        static let characterTop = Color(light: 0xFFFEFB, dark: 0xFFFEFB)
+        static let characterMid = Color(light: 0xF4F0E7, dark: 0xF4F0E7)
+        static let characterBottom = Color(light: 0xECE5D8, dark: 0xECE5D8)
+        static let characterInk = Color(hex: 0x2A2823)
+        static let characterHairline = Color(hex: 0x2A2823, opacity: 0.07)
 
-        static let textPrimary = Color(hex: 0x2A2823)
-        static let textSecondary = Color(hex: 0x5A554B)
-        static let textTertiary = Color(hex: 0x7C776C)
-        static let textMuted = Color(hex: 0x9A958A)
-        static let textCompleted = Color(hex: 0xABA69B)
+        static let textPrimary = Color(light: 0x2A2823, dark: 0xECE7DC)
+        static let textSecondary = Color(light: 0x5A554B, dark: 0xB6B0A4)
+        static let textTertiary = Color(light: 0x7C776C, dark: 0x8F8773)
+        static let textMuted = Color(light: 0x9A958A, dark: 0x8F8773)
+        static let textCompleted = Color(light: 0xABA69B, dark: 0x8F8773)
 
-        static let labelMuted = Color(hex: 0xA39E92)
-        static let labelQuiet = Color(hex: 0xB3AEA2)
+        static let labelMuted = Color(light: 0xA39E92, dark: 0x8F8773)
+        static let labelQuiet = Color(light: 0xB3AEA2, dark: 0x8F8773)
 
-        static let primary = Color(hex: 0x4A6B78)
-        static let primaryDeep = Color(hex: 0x3A5560)
-        static let progressGradientStart = Color(hex: 0x5E7F8A)
-        static let primaryGradientStart = Color(hex: 0x5A7B86)
-        static let primaryGradientEnd = Color(hex: 0x3F606B)
+        static let primary = Color(light: 0x4A6B78, dark: 0x6E97A4)
+        static let primaryDeep = Color(light: 0x3A5560, dark: 0x9DBEC8)
+        static let progressGradientStart = Color(light: 0x5E7F8A, dark: 0x6E97A4)
+        static let primaryGradientStart = Color(light: 0x5A7B86, dark: 0x9DBEC8)
+        static let primaryGradientEnd = Color(light: 0x3F606B, dark: 0x6E97A4)
 
-        static let destructive = Color(hex: 0xB0573F)
-        static let destructiveHover = Color(hex: 0x9C4A34)
-        static let rating = Color(hex: 0xD99A1D)
+        static let destructive = Color(light: 0xB0573F, dark: 0xDB7E5E)
+        static let destructiveHover = Color(light: 0x9C4A34, dark: 0xC96F53)
+        static let rating = Color(light: 0xD99A1D, dark: 0xD99A1D)
 
-        static let divider = Color(hex: 0x2A2823, opacity: 0.07)
-        static let hairline = Color(hex: 0x2A2823, opacity: 0.08)
-        static let controlSurface = Color(hex: 0x2A2823, opacity: 0.05)
-        static let rowHoverSurface = Color(hex: 0x2A2823, opacity: 0.045)
-        static let rowDeleteSurface = Color(hex: 0xB0573F, opacity: 0.08)
-        static let checkboxBorder = Color(hex: 0x2A2823, opacity: 0.22)
-        static let toggleOff = Color(hex: 0x2A2823, opacity: 0.16)
-        static let modalOverlay = Color(hex: 0x26221A, opacity: 0.30)
+        static let divider = Color(light: 0x2A2823, dark: 0xFFFFFF, lightOpacity: 0.07, darkOpacity: 0.08)
+        static let hairline = Color(light: 0x2A2823, dark: 0xFFFFFF, lightOpacity: 0.08, darkOpacity: 0.10)
+        static let controlSurface = Color(light: 0x2A2823, dark: 0xFFFFFF, lightOpacity: 0.05, darkOpacity: 0.10)
+        static let rowHoverSurface = Color(light: 0x2A2823, dark: 0xFFFFFF, lightOpacity: 0.045, darkOpacity: 0.08)
+        static let rowDeleteSurface = Color(light: 0xB0573F, dark: 0xDB7E5E, lightOpacity: 0.08, darkOpacity: 0.18)
+        static let checkboxBorder = Color(light: 0x2A2823, dark: 0xECE7DC, lightOpacity: 0.22, darkOpacity: 0.36)
+        static let toggleOff = Color(light: 0x2A2823, dark: 0xFFFFFF, lightOpacity: 0.16, darkOpacity: 0.22)
+        static let modalOverlay = Color(light: 0x26221A, dark: 0x000000, lightOpacity: 0.30, darkOpacity: 0.46)
+        static let segmentControlSurface = Color(light: 0x2A2823, dark: 0xFFFFFF, lightOpacity: 0.04, darkOpacity: 0.07)
+        static let segmentSelectedSurface = Color(light: 0xFFFFFF, dark: 0x3F3B34, lightOpacity: 0.72, darkOpacity: 0.88)
+        static let keyCapSurface = Color(light: 0xFFFFFF, dark: 0xFFFFFF, lightOpacity: 0.72, darkOpacity: 0.08)
+        static let modalSecondaryButtonSurface = Color(light: 0xFFFFFF, dark: 0xFFFFFF, lightOpacity: 0.48, darkOpacity: 0.03)
         static let onPrimary = Color.white
+        static let onDestructive = Color(light: 0xFFFFFF, dark: 0x201F1C)
 
-        static let documentBackground = Color(hex: 0xE7E3DA)
+        static let documentBackground = Color(light: 0xE7E3DA, dark: 0x26262B)
         static let desktopMockGradient = LinearGradient(
             colors: [
-                Color(hex: 0xDBD4C6),
-                Color(hex: 0xC9C8BF),
-                Color(hex: 0xAEB4B1)
+                Color(light: 0xDBD4C6, dark: 0x26262B),
+                Color(light: 0xC9C8BF, dark: 0x201F1C),
+                Color(light: 0xAEB4B1, dark: 0x343F3F)
             ],
             startPoint: UnitPoint(x: 0.05, y: 0),
             endPoint: UnitPoint(x: 0.95, y: 1)
         )
+    }
+
+    enum AppKitColors {
+        static let textPrimary = NSColor(light: 0x2A2823, dark: 0xECE7DC)
+        static let placeholder = NSColor(light: 0x9A958A, dark: 0x8F8773)
+        static let goalPlaceholder = NSColor(light: 0x7C776C, dark: 0x8F8773)
+        static let insertionPoint = NSColor(light: 0x4A6B78, dark: 0x9DBEC8)
     }
 
     enum Typography {
@@ -110,6 +125,8 @@ enum DesignTokens {
         static let settingsToggleHeight: CGFloat = 20
         static let settingsToggleKnob: CGFloat = 16
         static let modalWidth: CGFloat = 248
+        static let modalMinHeight: CGFloat = 184
+        static let modalButtonHeight: CGFloat = 40
         static let modalIconSize: CGFloat = 40
     }
 
@@ -143,5 +160,31 @@ extension Color {
         let green = Double((hex >> 8) & 0xFF) / 255
         let blue = Double(hex & 0xFF) / 255
         self.init(.sRGB, red: red, green: green, blue: blue, opacity: opacity)
+    }
+
+    init(light: UInt, dark: UInt, lightOpacity: Double = 1, darkOpacity: Double? = nil) {
+        self.init(nsColor: NSColor(light: light, dark: dark, lightAlpha: lightOpacity, darkAlpha: darkOpacity ?? lightOpacity))
+    }
+}
+
+extension NSColor {
+    convenience init(light: UInt, dark: UInt, lightAlpha: Double = 1, darkAlpha: Double? = nil) {
+        self.init(name: nil) { appearance in
+            let colorScheme = appearance.bestMatch(from: [.darkAqua, .aqua])
+            let usesDarkPalette = colorScheme == .darkAqua
+            return NSColor.notoStatic(
+                hex: usesDarkPalette ? dark : light,
+                alpha: usesDarkPalette ? CGFloat(darkAlpha ?? lightAlpha) : CGFloat(lightAlpha)
+            )
+        }
+    }
+
+    private static func notoStatic(hex: UInt, alpha: CGFloat) -> NSColor {
+        NSColor(
+            srgbRed: CGFloat((hex >> 16) & 0xFF) / 255,
+            green: CGFloat((hex >> 8) & 0xFF) / 255,
+            blue: CGFloat(hex & 0xFF) / 255,
+            alpha: alpha
+        )
     }
 }

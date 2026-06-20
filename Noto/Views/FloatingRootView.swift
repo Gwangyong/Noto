@@ -59,6 +59,7 @@ struct FloatingRootView: View {
                 .gesture(characterGesture(in: visibleFrame))
                 .zIndex(2)
             }
+            .preferredColorScheme(viewModel.settings.theme.preferredColorScheme)
             .onAppear {
                 characterOrigin = PanelPlacementResolver.clampedCharacterOrigin(
                     characterOrigin,
@@ -110,6 +111,19 @@ struct FloatingRootView: View {
                     isPanelOpen.toggle()
                 }
             }
+    }
+}
+
+private extension TaskPanelSettings.Theme {
+    var preferredColorScheme: ColorScheme? {
+        switch self {
+        case .system:
+            return nil
+        case .light:
+            return .light
+        case .dark:
+            return .dark
+        }
     }
 }
 

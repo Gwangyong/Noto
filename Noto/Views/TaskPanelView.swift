@@ -42,6 +42,8 @@ struct TaskPanelView: View {
             )
             .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
             .shadow(color: Color.black.opacity(0.30), radius: 44, x: 0, y: 20)
+            .blur(radius: viewModel.showingDeleteAllConfirm ? 4 : 0)
+            .allowsHitTesting(!viewModel.showingDeleteAllConfirm)
 
             if viewModel.showingDeleteAllConfirm {
                 DeleteAllConfirmView(
@@ -263,9 +265,9 @@ private struct InlineGoalTextView: NSViewRepresentable {
         textView.placeholder = "오늘의 목표를 입력하세요"
         textView.font = NSFont(name: "IBM Plex Sans KR", size: 13.5)
             ?? .systemFont(ofSize: 13.5, weight: .medium)
-        textView.textColor = NSColor(hex: 0x2A2823)
-        textView.placeholderColor = NSColor(hex: 0x7C776C)
-        textView.insertionPointColor = NSColor(hex: 0x4A6B78)
+        textView.textColor = DesignTokens.AppKitColors.textPrimary
+        textView.placeholderColor = DesignTokens.AppKitColors.goalPlaceholder
+        textView.insertionPointColor = DesignTokens.AppKitColors.insertionPoint
         textView.drawsBackground = false
         textView.isRichText = false
         textView.importsGraphics = false
@@ -444,17 +446,6 @@ private final class GoalTextView: NSTextView {
     }
 }
 
-private extension NSColor {
-    convenience init(hex: UInt, alpha: CGFloat = 1) {
-        self.init(
-            srgbRed: CGFloat((hex >> 16) & 0xFF) / 255,
-            green: CGFloat((hex >> 8) & 0xFF) / 255,
-            blue: CGFloat(hex & 0xFF) / 255,
-            alpha: alpha
-        )
-    }
-}
-
 private struct ProgressSummaryView: View {
     let progress: Int
 
@@ -512,12 +503,12 @@ private struct InlineTaskTitleEditor: NSViewRepresentable {
         let textView = TaskTitleTextView()
         let textFont = NSFont(name: "IBM Plex Sans KR", size: 13)
             ?? .systemFont(ofSize: 13, weight: .regular)
-        let textColor = NSColor(hex: 0x2A2823)
+        let textColor = DesignTokens.AppKitColors.textPrimary
 
         textView.delegate = context.coordinator
         textView.string = text
         textView.applyTaskTitleStyle(font: textFont, textColor: textColor)
-        textView.insertionPointColor = NSColor(hex: 0x4A6B78)
+        textView.insertionPointColor = DesignTokens.AppKitColors.insertionPoint
         textView.drawsBackground = false
         textView.isRichText = false
         textView.importsGraphics = false
@@ -900,11 +891,11 @@ private struct QuickAddTextEditor: NSViewRepresentable {
         let textView = QuickAddTextView()
         textView.delegate = context.coordinator
         textView.placeholder = "다음 할 일은?"
-        textView.placeholderColor = NSColor(hex: 0x9A958A)
+        textView.placeholderColor = DesignTokens.AppKitColors.placeholder
         textView.font = NSFont(name: "IBM Plex Sans KR", size: 12.5)
             ?? .systemFont(ofSize: 12.5, weight: .regular)
-        textView.textColor = NSColor(hex: 0x2A2823)
-        textView.insertionPointColor = NSColor(hex: 0x4A6B78)
+        textView.textColor = DesignTokens.AppKitColors.textPrimary
+        textView.insertionPointColor = DesignTokens.AppKitColors.insertionPoint
         textView.drawsBackground = false
         textView.isRichText = false
         textView.importsGraphics = false
@@ -1128,9 +1119,8 @@ private struct DeleteAllConfirmView: View {
         ZStack {
             RoundedRectangle(cornerRadius: DesignTokens.Radius.panel, style: .continuous)
                 .fill(DesignTokens.Colors.modalOverlay)
-                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.panel, style: .continuous))
 
-            VStack(spacing: 14) {
+            VStack(spacing: 16) {
                 ZStack {
                     Circle()
                         .fill(DesignTokens.Colors.rowDeleteSurface)
@@ -1141,7 +1131,7 @@ private struct DeleteAllConfirmView: View {
                         .foregroundStyle(DesignTokens.Colors.destructive)
                 }
 
-                VStack(spacing: 5) {
+                VStack(spacing: 6) {
                     Text("모든 할 일을 삭제할까요?")
                         .font(DesignTokens.Typography.modalTitle)
                         .foregroundStyle(DesignTokens.Colors.textPrimary)
@@ -1156,10 +1146,10 @@ private struct DeleteAllConfirmView: View {
                         .font(DesignTokens.Typography.secondaryButton)
                         .foregroundStyle(DesignTokens.Colors.primaryDeep)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
+                        .frame(height: DesignTokens.Size.modalButtonHeight)
                         .background(
                             RoundedRectangle(cornerRadius: DesignTokens.Radius.lg, style: .continuous)
-                                .fill(Color.white.opacity(0.48))
+                                .fill(DesignTokens.Colors.modalSecondaryButtonSurface)
                                 .overlay(
                                     RoundedRectangle(cornerRadius: DesignTokens.Radius.lg, style: .continuous)
                                         .stroke(DesignTokens.Colors.hairline, lineWidth: 1)
@@ -1169,9 +1159,9 @@ private struct DeleteAllConfirmView: View {
 
                     Button("삭제", action: onDelete)
                         .font(DesignTokens.Typography.button)
-                        .foregroundStyle(DesignTokens.Colors.onPrimary)
+                        .foregroundStyle(DesignTokens.Colors.onDestructive)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
+                        .frame(height: DesignTokens.Size.modalButtonHeight)
                         .background(
                             RoundedRectangle(cornerRadius: DesignTokens.Radius.lg, style: .continuous)
                                 .fill(DesignTokens.Colors.destructive)
@@ -1179,8 +1169,10 @@ private struct DeleteAllConfirmView: View {
                         .buttonStyle(.plain)
                 }
             }
-            .padding(DesignTokens.Spacing.xl)
+            .padding(.horizontal, DesignTokens.Spacing.xl)
+            .padding(.vertical, DesignTokens.Spacing.xxl)
             .frame(width: DesignTokens.Size.modalWidth)
+            .frame(minHeight: DesignTokens.Size.modalMinHeight)
             .background(
                 RoundedRectangle(cornerRadius: DesignTokens.Radius.modal, style: .continuous)
                     .fill(DesignTokens.Colors.panelSurface)
@@ -1350,7 +1342,7 @@ private struct ThemePickerRow: View {
                     Button(action: { onTheme(theme) }) {
                         Text(theme.rawValue)
                             .font(DesignTokens.Typography.sans(size: 12, weight: theme == selectedTheme ? .semibold : .regular))
-                            .foregroundStyle(theme == selectedTheme ? DesignTokens.Colors.onPrimary : DesignTokens.Colors.textSecondary)
+                            .foregroundStyle(theme == selectedTheme ? DesignTokens.Colors.textPrimary : DesignTokens.Colors.textSecondary)
                             .frame(maxWidth: .infinity, minHeight: 30)
                             .background(themeBackground(for: theme))
                             .contentShape(Rectangle())
@@ -1362,7 +1354,7 @@ private struct ThemePickerRow: View {
             .frame(maxWidth: .infinity)
             .background(
                 RoundedRectangle(cornerRadius: DesignTokens.Radius.lg, style: .continuous)
-                    .fill(DesignTokens.Colors.panelSurface.opacity(0.65))
+                    .fill(DesignTokens.Colors.segmentControlSurface)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: DesignTokens.Radius.lg, style: .continuous)
@@ -1377,8 +1369,8 @@ private struct ThemePickerRow: View {
         Group {
             if theme == selectedTheme {
                 RoundedRectangle(cornerRadius: DesignTokens.Radius.md, style: .continuous)
-                    .fill(DesignTokens.Colors.primary)
-                    .shadow(color: DesignTokens.Colors.primary.opacity(0.18), radius: 4, x: 0, y: 1)
+                    .fill(DesignTokens.Colors.segmentSelectedSurface)
+                    .shadow(color: Color.black.opacity(0.08), radius: 4, x: 0, y: 1)
             } else {
                 RoundedRectangle(cornerRadius: DesignTokens.Radius.md, style: .continuous)
                     .fill(Color.clear)
@@ -1415,7 +1407,7 @@ private struct ShortcutSettingRow: View {
                         .frame(width: 88, height: 30)
                         .background(
                             RoundedRectangle(cornerRadius: DesignTokens.Radius.md, style: .continuous)
-                                .fill(Color.white.opacity(0.72))
+                                .fill(DesignTokens.Colors.keyCapSurface)
                         )
                         .overlay(
                             RoundedRectangle(cornerRadius: DesignTokens.Radius.md, style: .continuous)

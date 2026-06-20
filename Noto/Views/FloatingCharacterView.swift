@@ -76,7 +76,7 @@ struct FloatingCharacterView: View {
                 }
                 .overlay {
                     NotoCharacterBlobShape()
-                        .stroke(DesignTokens.Colors.hairline.opacity(0.7), lineWidth: 1)
+                        .stroke(DesignTokens.Colors.characterHairline, lineWidth: 1)
                 }
                 .shadow(color: Color.black.opacity(0.10), radius: 2, x: 0, y: 1)
                 .shadow(color: Color.black.opacity(0.24), radius: 18, x: 0, y: 8)
@@ -101,11 +101,11 @@ struct FloatingCharacterView: View {
                     .frame(width: 6, height: 6)
                     .scaleEffect(x: 1, y: eyeScale)
             }
-            .foregroundStyle(DesignTokens.Colors.textPrimary)
+            .foregroundStyle(DesignTokens.Colors.characterInk)
             .offset(y: 1)
 
             Capsule()
-                .fill(DesignTokens.Colors.textPrimary.opacity(0.5))
+                .fill(DesignTokens.Colors.characterInk.opacity(0.5))
                 .frame(width: 7, height: 1.8)
                 .offset(y: 13)
         }
@@ -117,19 +117,19 @@ struct FloatingCharacterView: View {
                 .fill(Color.white.opacity(0.16))
                 .overlay(
                     Circle()
-                        .stroke(DesignTokens.Colors.textPrimary, lineWidth: 1.7)
+                        .stroke(DesignTokens.Colors.characterInk, lineWidth: 1.7)
                 )
                 .frame(width: 15, height: 15)
 
             Rectangle()
-                .fill(DesignTokens.Colors.textPrimary)
+                .fill(DesignTokens.Colors.characterInk)
                 .frame(width: 4, height: 1.7)
 
             Circle()
                 .fill(Color.white.opacity(0.16))
                 .overlay(
                     Circle()
-                        .stroke(DesignTokens.Colors.textPrimary, lineWidth: 1.7)
+                        .stroke(DesignTokens.Colors.characterInk, lineWidth: 1.7)
                 )
                 .frame(width: 15, height: 15)
         }
