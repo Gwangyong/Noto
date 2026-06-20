@@ -16,6 +16,9 @@ final class TaskPanelViewModel: ObservableObject {
     @Published var showingDeleteAllConfirm: Bool
     @Published var settings: TaskPanelSettings
 
+    var onSnapshotChange: ((TaskPanelSnapshot) -> Void)?
+    private var isApplyingSnapshot = false
+
     init(
         goal: String,
         tasks: [SampleTask],
@@ -36,6 +39,10 @@ final class TaskPanelViewModel: ObservableObject {
         self.settings = settings
     }
 
+    var snapshot: TaskPanelSnapshot {
+        TaskPanelSnapshot(goal: goal, tasks: tasks, settings: settings)
+    }
+
     var progress: Int {
         guard !tasks.isEmpty else { return 0 }
         let doneCount = tasks.filter(\.isDone).count
@@ -53,11 +60,11 @@ final class TaskPanelViewModel: ObservableObject {
         TaskPanelViewModel(
             goal: "발표 끝내고 디자인 리뷰까지",
             tasks: [
-                SampleTask(id: 1, title: "디자인 시스템 토큰 정리", isDone: true),
-                SampleTask(id: 2, title: "컴포넌트 라이브러리 업데이트", isDone: false),
-                SampleTask(id: 3, title: "클라이언트 발표 자료 준비", isDone: false),
-                SampleTask(id: 4, title: "모닝 루틴 · 하루 계획", isDone: true),
-                SampleTask(id: 5, title: "그리드 시스템 리팩토링", isDone: false)
+                SampleTask(title: "디자인 시스템 토큰 정리", isDone: true),
+                SampleTask(title: "컴포넌트 라이브러리 업데이트", isDone: false),
+                SampleTask(title: "클라이언트 발표 자료 준비", isDone: false),
+                SampleTask(title: "모닝 루틴 · 하루 계획", isDone: true),
+                SampleTask(title: "그리드 시스템 리팩토링", isDone: false)
             ],
             settings: TaskPanelSettings(
                 launchAtLogin: true,
@@ -68,9 +75,28 @@ final class TaskPanelViewModel: ObservableObject {
         )
     }
 
+    func applySnapshot(_ snapshot: TaskPanelSnapshot) {
+        isApplyingSnapshot = true
+        goal = snapshot.goal
+        tasks = snapshot.tasks
+        settings = snapshot.settings
+        quickAddText = ""
+        editingTaskID = nil
+        deletingTaskID = nil
+        showingDeleteAllConfirm = false
+        screen = .list
+        isApplyingSnapshot = false
+    }
+
+    func persistSnapshot() {
+        guard !isApplyingSnapshot else { return }
+        onSnapshotChange?(snapshot)
+    }
+
     func toggleDone(_ task: SampleTask) {
         guard let index = tasks.firstIndex(where: { $0.id == task.id }) else { return }
         tasks[index].isDone.toggle()
+        persistSnapshot()
     }
 
     func beginEditing(_ task: SampleTask) {
@@ -82,7 +108,11 @@ final class TaskPanelViewModel: ObservableObject {
         guard let index = tasks.firstIndex(where: { $0.id == task.id }) else { return }
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmed.isEmpty {
+            let shouldPersist = tasks[index].title != trimmed
             tasks[index].title = trimmed
+            if shouldPersist {
+                persistSnapshot()
+            }
         }
         editingTaskID = nil
     }
@@ -106,9 +136,11 @@ final class TaskPanelViewModel: ObservableObject {
 
         let task = tasks.remove(at: sourceIndex)
         tasks.insert(task, at: targetIndex)
+        persistSnapshot()
     }
 
     func deleteTask(_ task: SampleTask) {
+        let previousCount = tasks.count
         tasks.removeAll { $0.id == task.id }
         if editingTaskID == task.id {
             editingTaskID = nil
@@ -116,14 +148,17 @@ final class TaskPanelViewModel: ObservableObject {
         if deletingTaskID == task.id {
             deletingTaskID = nil
         }
+        if tasks.count != previousCount {
+            persistSnapshot()
+        }
     }
 
     func addQuickTask() {
         let trimmed = quickAddText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        let nextID = (tasks.map(\.id).max() ?? 0) + 1
-        tasks.append(SampleTask(id: nextID, title: trimmed, isDone: false))
+        tasks.append(SampleTask(title: trimmed, isDone: false))
         quickAddText = ""
+        persistSnapshot()
     }
 
     func showSettings() {
@@ -147,25 +182,34 @@ final class TaskPanelViewModel: ObservableObject {
     }
 
     func confirmDeleteAll() {
+        let shouldPersist = !tasks.isEmpty
         tasks.removeAll()
         editingTaskID = nil
         deletingTaskID = nil
         showingDeleteAllConfirm = false
+        if shouldPersist {
+            persistSnapshot()
+        }
     }
 
     func toggleLaunchAtLogin() {
         settings.launchAtLogin.toggle()
+        persistSnapshot()
     }
 
     func toggleKeepOnTop() {
         settings.keepOnTop.toggle()
+        persistSnapshot()
     }
 
     func toggleCompletionSound() {
         settings.completionSound.toggle()
+        persistSnapshot()
     }
 
     func setTheme(_ theme: TaskPanelSettings.Theme) {
+        guard settings.theme != theme else { return }
         settings.theme = theme
+        persistSnapshot()
     }
 }

@@ -70,7 +70,8 @@ struct TaskPanelView: View {
 
             GoalInputView(
                 goal: $viewModel.goal,
-                isEditing: $isEditingGoal
+                isEditing: $isEditingGoal,
+                onCommit: viewModel.persistSnapshot
             )
             .padding(.horizontal, DesignTokens.Spacing.lg)
 
@@ -255,6 +256,7 @@ private struct HeaderIconButton: View {
 private struct GoalInputView: View {
     @Binding var goal: String
     @Binding var isEditing: Bool
+    let onCommit: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -262,7 +264,7 @@ private struct GoalInputView: View {
                 .font(DesignTokens.Typography.labelMono)
                 .foregroundStyle(DesignTokens.Colors.labelMuted)
 
-            InlineGoalTextView(text: $goal, isEditing: $isEditing)
+            InlineGoalTextView(text: $goal, isEditing: $isEditing, onCommit: onCommit)
                 .frame(height: 18, alignment: .center)
         }
         .frame(height: 40, alignment: .topLeading)
@@ -272,6 +274,7 @@ private struct GoalInputView: View {
 private struct InlineGoalTextView: NSViewRepresentable {
     @Binding var text: String
     @Binding var isEditing: Bool
+    var onCommit: () -> Void = {}
 
     func makeNSView(context: Context) -> GoalTextView {
         let textView = GoalTextView()
@@ -356,6 +359,7 @@ private struct InlineGoalTextView: NSViewRepresentable {
 
         func commitEditing() {
             parent.isEditing = false
+            parent.onCommit()
         }
 
         func textDidChange(_ notification: Notification) {
@@ -768,7 +772,7 @@ private struct TaskRowView: View {
                         .contentShape(Rectangle())
                         .onDrag {
                             onDragStart()
-                            return NSItemProvider(object: String(task.id) as NSString)
+                            return NSItemProvider(object: task.id.uuidString as NSString)
                         } preview: {
                             Color.clear
                                 .frame(width: 1, height: 1)

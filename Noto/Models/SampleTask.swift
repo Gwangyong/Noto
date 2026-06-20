@@ -6,9 +6,21 @@
 import Foundation
 
 struct SampleTask: Identifiable, Equatable {
-    let id: Int
+    let id: UUID
     var title: String
     var isDone: Bool
+
+    init(id: UUID = UUID(), title: String, isDone: Bool) {
+        self.id = id
+        self.title = title
+        self.isDone = isDone
+    }
+}
+
+struct TaskPanelSnapshot: Equatable {
+    var goal: String
+    var tasks: [SampleTask]
+    var settings: TaskPanelSettings
 }
 
 struct TaskPanelSettings: Equatable {
