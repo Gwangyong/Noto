@@ -488,6 +488,8 @@ private struct ProgressSummaryView: View {
     }
 }
 
+private let taskTitleLineSpacing: CGFloat = 3
+
 private struct InlineTaskTitleEditor: NSViewRepresentable {
     let text: String
     @Binding var measuredHeight: CGFloat
@@ -495,11 +497,13 @@ private struct InlineTaskTitleEditor: NSViewRepresentable {
 
     func makeNSView(context: Context) -> TaskTitleTextView {
         let textView = TaskTitleTextView()
+        let textFont = NSFont(name: "IBM Plex Sans KR", size: 13)
+            ?? .systemFont(ofSize: 13, weight: .regular)
+        let textColor = NSColor(hex: 0x2A2823)
+
         textView.delegate = context.coordinator
         textView.string = text
-        textView.font = NSFont(name: "IBM Plex Sans KR", size: 13)
-            ?? .systemFont(ofSize: 13, weight: .regular)
-        textView.textColor = NSColor(hex: 0x2A2823)
+        textView.applyTaskTitleStyle(font: textFont, textColor: textColor)
         textView.insertionPointColor = NSColor(hex: 0x4A6B78)
         textView.drawsBackground = false
         textView.isRichText = false
@@ -530,6 +534,7 @@ private struct InlineTaskTitleEditor: NSViewRepresentable {
         context.coordinator.parent = self
         if !nsView.hasUserEditedText, nsView.string != text {
             nsView.string = text
+            nsView.applyTaskTitleAttributes()
         }
         context.coordinator.configure(nsView)
     }
@@ -599,6 +604,7 @@ private final class TaskTitleTextView: NSTextView {
     private var outsideClickMonitor: Any?
     private var didRequestInitialFocus = false
     private var currentMeasuredHeight: CGFloat = 18
+    private var taskTitleAttributes: [NSAttributedString.Key: Any] = [:]
 
     override var intrinsicContentSize: NSSize {
         NSSize(width: NSView.noIntrinsicMetric, height: currentMeasuredHeight)
@@ -625,6 +631,32 @@ private final class TaskTitleTextView: NSTextView {
             return
         }
         super.keyDown(with: event)
+    }
+
+    func applyTaskTitleStyle(font: NSFont, textColor: NSColor) {
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.lineBreakMode = .byCharWrapping
+        paragraphStyle.lineSpacing = taskTitleLineSpacing
+
+        self.font = font
+        self.textColor = textColor
+        defaultParagraphStyle = paragraphStyle
+        taskTitleAttributes = [
+            .font: font,
+            .foregroundColor: textColor,
+            .paragraphStyle: paragraphStyle
+        ]
+        typingAttributes = taskTitleAttributes
+        applyTaskTitleAttributes()
+    }
+
+    func applyTaskTitleAttributes() {
+        guard !taskTitleAttributes.isEmpty else { return }
+        typingAttributes = taskTitleAttributes
+
+        let range = NSRange(location: 0, length: string.utf16.count)
+        guard range.length > 0 else { return }
+        textStorage?.addAttributes(taskTitleAttributes, range: range)
     }
 
     func focusForEditingIfNeeded() {
@@ -742,6 +774,7 @@ private struct TaskRowView: View {
                     .font(DesignTokens.Typography.body)
                     .foregroundStyle(task.isDone ? DesignTokens.Colors.textCompleted : DesignTokens.Colors.textPrimary)
                     .strikethrough(task.isDone, color: DesignTokens.Colors.textCompleted)
+                    .lineSpacing(taskTitleLineSpacing)
                     .lineLimit(nil)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
