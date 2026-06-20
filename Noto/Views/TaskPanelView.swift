@@ -78,29 +78,42 @@ struct TaskPanelView: View {
                 .padding(.horizontal, DesignTokens.Spacing.lg)
                 .padding(.top, 8)
 
-            ScrollView(.vertical, showsIndicators: false) {
-                VStack(spacing: 3) {
-                    if viewModel.tasks.isEmpty {
-                        EmptyTaskListView()
-                            .padding(.top, 24)
-                    } else {
-                        ForEach(viewModel.tasks) { task in
-                            TaskRowView(
-                                task: task,
-                                isEditing: viewModel.editingTaskID == task.id,
-                                isDeleting: viewModel.deletingTaskID == task.id,
-                                onToggle: { viewModel.toggleDone(task) },
-                                onEdit: { viewModel.beginEditing(task) },
-                                onCommitEdit: { title in viewModel.commitEditing(task, title: title) },
-                                onDelete: { viewModel.showDeletingState(task) }
-                            )
+            ScrollViewReader { scrollProxy in
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(spacing: 3) {
+                        if viewModel.tasks.isEmpty {
+                            EmptyTaskListView()
+                                .padding(.top, 24)
+                        } else {
+                            ForEach(viewModel.tasks) { task in
+                                TaskRowView(
+                                    task: task,
+                                    isEditing: viewModel.editingTaskID == task.id,
+                                    isDeleting: viewModel.deletingTaskID == task.id,
+                                    onToggle: { viewModel.toggleDone(task) },
+                                    onEdit: { viewModel.beginEditing(task) },
+                                    onCommitEdit: { title in viewModel.commitEditing(task, title: title) },
+                                    onDelete: { viewModel.showDeletingState(task) }
+                                )
+                                .id(task.id)
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .top)
+                    .padding(.horizontal, 10)
+                    .padding(.top, 12)
+                    .padding(.bottom, 12)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .onChange(of: viewModel.tasks.count) { oldCount, newCount in
+                    guard newCount > oldCount, let lastTaskID = viewModel.tasks.last?.id else { return }
+
+                    DispatchQueue.main.async {
+                        withAnimation(.easeOut(duration: 0.18)) {
+                            scrollProxy.scrollTo(lastTaskID, anchor: .bottom)
                         }
                     }
                 }
-                .frame(maxWidth: .infinity, alignment: .top)
-                .padding(.horizontal, 10)
-                .padding(.top, 12)
-                .padding(.bottom, 12)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
