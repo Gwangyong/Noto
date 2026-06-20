@@ -5,6 +5,7 @@
 
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 private enum TaskPanelFocusField: Hashable {
     case quickAdd
@@ -16,6 +17,7 @@ struct TaskPanelView: View {
 
     @FocusState private var focusedField: TaskPanelFocusField?
     @State private var isEditingGoal = false
+    @State private var draggingTaskID: SampleTask.ID?
 
     private var panelHeight: CGFloat {
         viewModel.screen == .settings
@@ -95,9 +97,21 @@ struct TaskPanelView: View {
                                     onToggle: { viewModel.toggleDone(task) },
                                     onEdit: { viewModel.beginEditing(task) },
                                     onCommitEdit: { title in viewModel.commitEditing(task, title: title) },
-                                    onDelete: { viewModel.deleteTask(task) }
+                                    onDelete: { viewModel.deleteTask(task) },
+                                    onDragStart: {
+                                        draggingTaskID = task.id
+                                        viewModel.beginReordering(task)
+                                    }
                                 )
                                 .id(task.id)
+                                .onDrop(
+                                    of: [UTType.text],
+                                    delegate: TaskRowDropDelegate(
+                                        targetTaskID: task.id,
+                                        draggingTaskID: $draggingTaskID,
+                                        onMove: viewModel.moveTask
+                                    )
+                                )
                             }
                         }
                     }
@@ -734,6 +748,7 @@ private struct TaskRowView: View {
     let onEdit: () -> Void
     let onCommitEdit: (String) -> Void
     let onDelete: () -> Void
+    let onDragStart: () -> Void
 
     @State private var isHovering = false
     @State private var draftTitleHeight: CGFloat = 18
@@ -749,9 +764,17 @@ private struct TaskRowView: View {
                     Image(systemName: "line.3.horizontal")
                         .font(.system(size: 9, weight: .bold))
                         .foregroundStyle(DesignTokens.Colors.textTertiary)
-                        .frame(width: 8)
+                        .frame(width: 12, height: 24)
+                        .contentShape(Rectangle())
+                        .onDrag {
+                            onDragStart()
+                            return NSItemProvider(object: String(task.id) as NSString)
+                        } preview: {
+                            Color.clear
+                                .frame(width: 1, height: 1)
+                        }
                 } else {
-                    Color.clear.frame(width: 8)
+                    Color.clear.frame(width: 12, height: 24)
                 }
             }
 
@@ -828,6 +851,33 @@ private struct TaskRowView: View {
             return DesignTokens.Colors.rowHoverSurface
         }
         return Color.clear
+    }
+}
+
+private struct TaskRowDropDelegate: DropDelegate {
+    let targetTaskID: SampleTask.ID
+    @Binding var draggingTaskID: SampleTask.ID?
+    let onMove: (SampleTask.ID, SampleTask.ID) -> Void
+
+    func validateDrop(info: DropInfo) -> Bool {
+        draggingTaskID != nil
+    }
+
+    func dropEntered(info: DropInfo) {
+        guard let draggingTaskID, draggingTaskID != targetTaskID else { return }
+
+        withAnimation(.easeOut(duration: 0.14)) {
+            onMove(draggingTaskID, targetTaskID)
+        }
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .move)
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        draggingTaskID = nil
+        return true
     }
 }
 

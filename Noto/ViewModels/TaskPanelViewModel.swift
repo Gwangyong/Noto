@@ -92,6 +92,22 @@ final class TaskPanelViewModel: ObservableObject {
         editingTaskID = nil
     }
 
+    func beginReordering(_ task: SampleTask) {
+        guard tasks.contains(where: { $0.id == task.id }) else { return }
+        editingTaskID = nil
+        deletingTaskID = nil
+    }
+
+    func moveTask(draggingID: SampleTask.ID, over targetID: SampleTask.ID) {
+        guard draggingID != targetID,
+              let sourceIndex = tasks.firstIndex(where: { $0.id == draggingID }),
+              let targetIndex = tasks.firstIndex(where: { $0.id == targetID })
+        else { return }
+
+        let task = tasks.remove(at: sourceIndex)
+        tasks.insert(task, at: targetIndex)
+    }
+
     func deleteTask(_ task: SampleTask) {
         tasks.removeAll { $0.id == task.id }
         if editingTaskID == task.id {
