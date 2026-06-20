@@ -1244,33 +1244,11 @@ private struct SettingsPanelView: View {
                 .padding(.horizontal, DesignTokens.Spacing.lg)
                 .padding(.top, 8)
 
-            Button(action: {}) {
-                HStack {
-                    Text("위치 초기화")
-                        .font(DesignTokens.Typography.body)
-                    Spacer()
-                    Image(systemName: "arrow.counterclockwise")
-                        .font(.system(size: 12, weight: .semibold))
-                }
-                .foregroundStyle(DesignTokens.Colors.primaryDeep)
-                .padding(.vertical, 9)
-            }
-            .padding(.horizontal, DesignTokens.Spacing.lg)
-            .buttonStyle(.plain)
-
             Spacer(minLength: 12)
 
-            VStack(spacing: 5) {
-                HStack {
-                    Text("VERSION")
-                    Spacer()
-                    Text("0.1.0")
-                }
-                HStack {
-                    Text("SHORTCUT")
-                    Spacer()
-                    Text("⌥ Space 로 열기")
-                }
+            HStack {
+                Spacer()
+                Text("version 1.0.0")
             }
             .font(DesignTokens.Typography.settingsMeta)
             .foregroundStyle(DesignTokens.Colors.textMuted)
@@ -1348,24 +1326,39 @@ private struct ThemePickerRow: View {
                     Button(action: { onTheme(theme) }) {
                         Text(theme.rawValue)
                             .font(DesignTokens.Typography.sans(size: 12, weight: theme == selectedTheme ? .semibold : .regular))
-                            .foregroundStyle(theme == selectedTheme ? DesignTokens.Colors.textPrimary : DesignTokens.Colors.textSecondary)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 6)
-                            .background(
-                                RoundedRectangle(cornerRadius: DesignTokens.Radius.md, style: .continuous)
-                                    .fill(theme == selectedTheme ? Color.white.opacity(0.72) : Color.clear)
-                                    .shadow(color: theme == selectedTheme ? Color.black.opacity(0.08) : Color.clear, radius: 4, x: 0, y: 1)
-                            )
+                            .foregroundStyle(theme == selectedTheme ? DesignTokens.Colors.onPrimary : DesignTokens.Colors.textSecondary)
+                            .frame(maxWidth: .infinity, minHeight: 30)
+                            .background(themeBackground(for: theme))
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                 }
             }
+            .padding(2)
+            .frame(maxWidth: .infinity)
+            .background(
+                RoundedRectangle(cornerRadius: DesignTokens.Radius.lg, style: .continuous)
+                    .fill(DesignTokens.Colors.panelSurface.opacity(0.65))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: DesignTokens.Radius.lg, style: .continuous)
+                    .stroke(DesignTokens.Colors.hairline.opacity(0.8), lineWidth: 0.7)
+            )
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.top, 8)
-        .background(alignment: .bottom) {
-            RoundedRectangle(cornerRadius: DesignTokens.Radius.lg, style: .continuous)
-                .fill(DesignTokens.Colors.controlSurface)
-                .frame(height: 31)
+    }
+
+    private func themeBackground(for theme: TaskPanelSettings.Theme) -> some View {
+        Group {
+            if theme == selectedTheme {
+                RoundedRectangle(cornerRadius: DesignTokens.Radius.md, style: .continuous)
+                    .fill(DesignTokens.Colors.primary)
+                    .shadow(color: DesignTokens.Colors.primary.opacity(0.18), radius: 4, x: 0, y: 1)
+            } else {
+                RoundedRectangle(cornerRadius: DesignTokens.Radius.md, style: .continuous)
+                    .fill(Color.clear)
+            }
         }
     }
 }
