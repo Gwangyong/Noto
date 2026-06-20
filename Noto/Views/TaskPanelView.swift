@@ -76,7 +76,7 @@ struct TaskPanelView: View {
 
             Divider()
                 .overlay(DesignTokens.Colors.divider)
-                .padding(.top, 8)
+                .padding(.top, 4)
 
             ProgressSummaryView(progress: viewModel.progress)
                 .padding(.horizontal, DesignTokens.Spacing.lg)
@@ -257,7 +257,7 @@ private struct GoalInputView: View {
     let onCommit: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 7) {
             Text("목표 · GOAL")
                 .font(DesignTokens.Typography.labelMono)
                 .foregroundStyle(DesignTokens.Colors.labelMuted)
@@ -265,7 +265,8 @@ private struct GoalInputView: View {
             InlineGoalTextView(text: $goal, isEditing: $isEditing, onCommit: onCommit)
                 .frame(height: 18, alignment: .center)
         }
-        .frame(height: 40, alignment: .topLeading)
+        .frame(height: 38, alignment: .topLeading)
+        .padding(.top, 2)
     }
 }
 
@@ -296,20 +297,24 @@ private struct InlineGoalTextView: NSViewRepresentable {
         textView.textContainer?.maximumNumberOfLines = 1
         textView.textContainer?.lineBreakMode = .byTruncatingTail
         textView.textContainer?.widthTracksTextView = true
+        textView.onTextChange = { value in
+            context.coordinator.updateText(value)
+        }
         textView.onBeginEditing = { view, event in
             context.coordinator.beginEditing(view, event: event)
         }
         textView.onCommit = {
             context.coordinator.commitEditing()
         }
+        textView.setExternalText(text)
         context.coordinator.configure(textView)
         return textView
     }
 
     func updateNSView(_ nsView: GoalTextView, context: Context) {
         context.coordinator.parent = self
-        if nsView.string != text {
-            nsView.string = text
+        if !isEditing && nsView.string != text {
+            nsView.setExternalText(text)
         }
         context.coordinator.configure(nsView)
     }
@@ -343,6 +348,12 @@ private struct InlineGoalTextView: NSViewRepresentable {
             textView.window?.makeFirstResponder(nil)
         }
 
+        func updateText(_ value: String) {
+            let singleLineText = value.replacingOccurrences(of: "\n", with: " ")
+            guard parent.text != singleLineText else { return }
+            parent.text = singleLineText
+        }
+
         func beginEditing(_ textView: GoalTextView, event: NSEvent) {
             isCommitting = false
             textView.isEditingMode = true
@@ -372,14 +383,8 @@ private struct InlineGoalTextView: NSViewRepresentable {
         }
 
         func textDidChange(_ notification: Notification) {
-            guard let textView = notification.object as? NSTextView else { return }
-            let singleLineText = textView.string.replacingOccurrences(of: "\n", with: " ")
-            if parent.text != singleLineText {
-                updateBindingState { [weak self] in
-                    guard let self, self.parent.text != singleLineText else { return }
-                    self.parent.text = singleLineText
-                }
-            }
+            guard let textView = notification.object as? GoalTextView else { return }
+            textView.notifyTextChanged()
         }
 
         func textDidEndEditing(_ notification: Notification) {
@@ -409,8 +414,10 @@ private final class GoalTextView: NSTextView {
     var placeholder = ""
     var placeholderColor = NSColor.secondaryLabelColor
     var isEditingMode = false
+    var onTextChange: ((String) -> Void)?
     var onBeginEditing: ((GoalTextView, NSEvent) -> Void)?
     var onCommit: (() -> Void)?
+    private var isApplyingExternalText = false
     private var outsideClickMonitor: Any?
 
     override var acceptsFirstResponder: Bool {
@@ -431,6 +438,34 @@ private final class GoalTextView: NSTextView {
             return
         }
         super.keyDown(with: event)
+    }
+
+    override func insertText(_ insertString: Any, replacementRange: NSRange) {
+        super.insertText(insertString, replacementRange: replacementRange)
+        notifyTextChanged()
+    }
+
+    override func setMarkedText(_ string: Any, selectedRange: NSRange, replacementRange: NSRange) {
+        super.setMarkedText(string, selectedRange: selectedRange, replacementRange: replacementRange)
+        notifyTextChanged()
+    }
+
+    override func unmarkText() {
+        super.unmarkText()
+        notifyTextChanged()
+    }
+
+    func setExternalText(_ value: String) {
+        isApplyingExternalText = true
+        string = value
+        isApplyingExternalText = false
+        needsDisplay = true
+    }
+
+    func notifyTextChanged() {
+        guard !isApplyingExternalText else { return }
+        onTextChange?(string)
+        needsDisplay = true
     }
 
     func startOutsideClickMonitoring() {
