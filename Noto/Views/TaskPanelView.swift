@@ -3,11 +3,19 @@
 //  Noto
 //
 
+import AppKit
 import SwiftUI
+
+private enum TaskPanelFocusField: Hashable {
+    case quickAdd
+}
 
 struct TaskPanelView: View {
     @ObservedObject var viewModel: TaskPanelViewModel
     let onCollapse: () -> Void
+
+    @FocusState private var focusedField: TaskPanelFocusField?
+    @State private var isEditingGoal = false
 
     private var panelHeight: CGFloat {
         viewModel.screen == .settings
@@ -56,8 +64,11 @@ struct TaskPanelView: View {
                 onCollapse: onCollapse
             )
 
-            GoalInputView(goal: $viewModel.goal)
-                .padding(.horizontal, DesignTokens.Spacing.lg)
+            GoalInputView(
+                goal: $viewModel.goal,
+                isEditing: $isEditingGoal
+            )
+            .padding(.horizontal, DesignTokens.Spacing.lg)
 
             Divider()
                 .overlay(DesignTokens.Colors.divider)
@@ -92,6 +103,7 @@ struct TaskPanelView: View {
 
             QuickAddView(
                 text: $viewModel.quickAddText,
+                focusedField: $focusedField,
                 onSubmit: viewModel.addQuickTask,
                 onMic: {}
             )
@@ -105,7 +117,7 @@ struct TaskPanelView: View {
                         Rectangle()
                             .fill(DesignTokens.Colors.divider)
                             .frame(height: 1)
-                    }
+                }
             )
         }
     }
@@ -210,20 +222,220 @@ private struct HeaderIconButton: View {
 
 private struct GoalInputView: View {
     @Binding var goal: String
+    @Binding var isEditing: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
+        VStack(alignment: .leading, spacing: 8) {
             Text("목표 · GOAL")
                 .font(DesignTokens.Typography.labelMono)
                 .foregroundStyle(DesignTokens.Colors.labelMuted)
 
-            TextField("오늘의 목표를 입력하세요", text: $goal)
-                .font(DesignTokens.Typography.bodyStrong)
-                .foregroundStyle(DesignTokens.Colors.textPrimary)
-                .textFieldStyle(.plain)
-                .lineLimit(1)
+            InlineGoalTextView(text: $goal, isEditing: $isEditing)
+                .frame(height: 18, alignment: .center)
         }
-        .frame(height: 44, alignment: .topLeading)
+        .frame(height: 40, alignment: .topLeading)
+    }
+}
+
+private struct InlineGoalTextView: NSViewRepresentable {
+    @Binding var text: String
+    @Binding var isEditing: Bool
+
+    func makeNSView(context: Context) -> GoalTextView {
+        let textView = GoalTextView()
+        textView.delegate = context.coordinator
+        textView.placeholder = "오늘의 목표를 입력하세요"
+        textView.font = NSFont(name: "IBM Plex Sans KR", size: 13.5)
+            ?? .systemFont(ofSize: 13.5, weight: .medium)
+        textView.textColor = NSColor(hex: 0x2A2823)
+        textView.placeholderColor = NSColor(hex: 0x7C776C)
+        textView.insertionPointColor = NSColor(hex: 0x4A6B78)
+        textView.drawsBackground = false
+        textView.isRichText = false
+        textView.importsGraphics = false
+        textView.allowsUndo = true
+        textView.usesFindBar = false
+        textView.isAutomaticQuoteSubstitutionEnabled = false
+        textView.isAutomaticDashSubstitutionEnabled = false
+        textView.isAutomaticTextReplacementEnabled = false
+        textView.textContainerInset = .zero
+        textView.textContainer?.lineFragmentPadding = 0
+        textView.textContainer?.maximumNumberOfLines = 1
+        textView.textContainer?.lineBreakMode = .byTruncatingTail
+        textView.textContainer?.widthTracksTextView = true
+        textView.onBeginEditing = { view, event in
+            context.coordinator.beginEditing(view, event: event)
+        }
+        textView.onCommit = {
+            context.coordinator.commitEditing()
+        }
+        context.coordinator.configure(textView)
+        return textView
+    }
+
+    func updateNSView(_ nsView: GoalTextView, context: Context) {
+        context.coordinator.parent = self
+        if nsView.string != text {
+            nsView.string = text
+        }
+        context.coordinator.configure(nsView)
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
+
+    final class Coordinator: NSObject, NSTextViewDelegate {
+        var parent: InlineGoalTextView
+
+        init(parent: InlineGoalTextView) {
+            self.parent = parent
+        }
+
+        func configure(_ textView: GoalTextView) {
+            textView.isEditingMode = parent.isEditing
+            textView.isEditable = parent.isEditing
+            textView.isSelectable = parent.isEditing
+            textView.needsDisplay = true
+
+            if parent.isEditing {
+                textView.startOutsideClickMonitoring()
+            } else {
+                textView.stopOutsideClickMonitoring()
+            }
+
+            guard !parent.isEditing, textView.window?.firstResponder === textView else { return }
+            textView.setSelectedRange(NSRange(location: 0, length: 0))
+            textView.window?.makeFirstResponder(nil)
+        }
+
+        func beginEditing(_ textView: GoalTextView, event: NSEvent) {
+            parent.isEditing = true
+            textView.isEditingMode = true
+            textView.isEditable = true
+            textView.isSelectable = true
+            textView.startOutsideClickMonitoring()
+            textView.window?.makeFirstResponder(textView)
+
+            let clickPoint = textView.convert(event.locationInWindow, from: nil)
+            let insertionIndex = min(textView.characterIndexForInsertion(at: clickPoint), textView.string.utf16.count)
+            textView.setSelectedRange(NSRange(location: insertionIndex, length: 0))
+        }
+
+        func commitEditing() {
+            parent.isEditing = false
+        }
+
+        func textDidChange(_ notification: Notification) {
+            guard let textView = notification.object as? NSTextView else { return }
+            let singleLineText = textView.string.replacingOccurrences(of: "\n", with: " ")
+            if parent.text != singleLineText {
+                parent.text = singleLineText
+            }
+        }
+
+        func textDidEndEditing(_ notification: Notification) {
+            parent.isEditing = false
+        }
+
+        func textView(_ textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+            switch commandSelector {
+            case #selector(NSResponder.insertNewline(_:)),
+                 #selector(NSResponder.insertNewlineIgnoringFieldEditor(_:)):
+                commitEditing()
+                return true
+            default:
+                return false
+            }
+        }
+    }
+}
+
+private final class GoalTextView: NSTextView {
+    var placeholder = ""
+    var placeholderColor = NSColor.secondaryLabelColor
+    var isEditingMode = false
+    var onBeginEditing: ((GoalTextView, NSEvent) -> Void)?
+    var onCommit: (() -> Void)?
+    private var outsideClickMonitor: Any?
+
+    override var acceptsFirstResponder: Bool {
+        true
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        guard isEditingMode else {
+            onBeginEditing?(self, event)
+            return
+        }
+        super.mouseDown(with: event)
+    }
+
+    override func keyDown(with event: NSEvent) {
+        if event.keyCode == 36 || event.keyCode == 76 {
+            finishEditing()
+            return
+        }
+        super.keyDown(with: event)
+    }
+
+    func startOutsideClickMonitoring() {
+        guard outsideClickMonitor == nil else { return }
+        outsideClickMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
+            guard let self, self.isEditingMode else { return event }
+            guard event.window === self.window else {
+                self.finishEditing()
+                return event
+            }
+
+            let eventPoint = self.convert(event.locationInWindow, from: nil)
+            if !self.bounds.contains(eventPoint) {
+                self.finishEditing()
+            }
+            return event
+        }
+    }
+
+    func stopOutsideClickMonitoring() {
+        guard let outsideClickMonitor else { return }
+        NSEvent.removeMonitor(outsideClickMonitor)
+        self.outsideClickMonitor = nil
+    }
+
+    private func finishEditing() {
+        stopOutsideClickMonitoring()
+        isEditingMode = false
+        isEditable = false
+        isSelectable = false
+        setSelectedRange(NSRange(location: 0, length: 0))
+        onCommit?()
+        window?.makeFirstResponder(nil)
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+
+        guard string.isEmpty else { return }
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: font ?? NSFont.systemFont(ofSize: 13.5, weight: .medium),
+            .foregroundColor: placeholderColor
+        ]
+        placeholder.draw(at: .zero, withAttributes: attributes)
+    }
+
+    deinit {
+        stopOutsideClickMonitoring()
+    }
+}
+
+private extension NSColor {
+    convenience init(hex: UInt, alpha: CGFloat = 1) {
+        self.init(
+            srgbRed: CGFloat((hex >> 16) & 0xFF) / 255,
+            green: CGFloat((hex >> 8) & 0xFF) / 255,
+            blue: CGFloat(hex & 0xFF) / 255,
+            alpha: alpha
+        )
     }
 }
 
@@ -308,10 +520,6 @@ private struct TaskRowView: View {
             .buttonStyle(.plain)
 
             if isEditing {
-                Image(systemName: "pencil")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(DesignTokens.Colors.primary)
-
                 TextField("", text: $draftTitle)
                     .font(DesignTokens.Typography.body)
                     .foregroundStyle(DesignTokens.Colors.textPrimary)
@@ -428,6 +636,7 @@ private struct EmptyTaskListView: View {
 
 private struct QuickAddView: View {
     @Binding var text: String
+    let focusedField: FocusState<TaskPanelFocusField?>.Binding
     let onSubmit: () -> Void
     let onMic: () -> Void
 
@@ -437,6 +646,7 @@ private struct QuickAddView: View {
                 .font(DesignTokens.Typography.input)
                 .foregroundStyle(DesignTokens.Colors.textPrimary)
                 .textFieldStyle(.plain)
+                .focused(focusedField, equals: .quickAdd)
                 .onSubmit(onSubmit)
 
             Button(action: onMic) {
