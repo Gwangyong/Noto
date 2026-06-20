@@ -302,6 +302,9 @@ struct FloatingRootView: View {
         }
 
         withoutAnimation {
+            if isOpen {
+                viewModel.showList()
+            }
             isPanelOpen = isOpen
             updateFloatingWindowLayout(animated: false)
         }
