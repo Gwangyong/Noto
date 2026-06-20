@@ -876,23 +876,199 @@ private struct EmptyTaskListView: View {
     }
 }
 
+private struct QuickAddTextEditor: NSViewRepresentable {
+    @Binding var text: String
+    let focusedField: FocusState<TaskPanelFocusField?>.Binding
+    let onSubmit: () -> Void
+
+    func makeNSView(context: Context) -> QuickAddTextView {
+        let textView = QuickAddTextView()
+        textView.delegate = context.coordinator
+        textView.placeholder = "다음 할 일은?"
+        textView.placeholderColor = NSColor(hex: 0x9A958A)
+        textView.font = NSFont(name: "IBM Plex Sans KR", size: 12.5)
+            ?? .systemFont(ofSize: 12.5, weight: .regular)
+        textView.textColor = NSColor(hex: 0x2A2823)
+        textView.insertionPointColor = NSColor(hex: 0x4A6B78)
+        textView.drawsBackground = false
+        textView.isRichText = false
+        textView.importsGraphics = false
+        textView.allowsUndo = true
+        textView.usesFindBar = false
+        textView.isAutomaticQuoteSubstitutionEnabled = false
+        textView.isAutomaticDashSubstitutionEnabled = false
+        textView.isAutomaticTextReplacementEnabled = false
+        textView.textContainerInset = NSSize(width: 0, height: 1.5)
+        textView.textContainer?.lineFragmentPadding = 0
+        textView.textContainer?.maximumNumberOfLines = 1
+        textView.textContainer?.lineBreakMode = .byClipping
+        textView.textContainer?.widthTracksTextView = true
+        textView.onTextChange = { value in
+            context.coordinator.updateText(value)
+        }
+        textView.onSubmit = { value in
+            context.coordinator.submit(value)
+        }
+        textView.setExternalText(text)
+        return textView
+    }
+
+    func updateNSView(_ nsView: QuickAddTextView, context: Context) {
+        context.coordinator.parent = self
+        if nsView.string != text {
+            nsView.setExternalText(text)
+        }
+        if focusedField.wrappedValue == .quickAdd {
+            nsView.focusIfPossible()
+        }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
+
+    final class Coordinator: NSObject, NSTextViewDelegate {
+        var parent: QuickAddTextEditor
+
+        init(parent: QuickAddTextEditor) {
+            self.parent = parent
+        }
+
+        func updateText(_ value: String) {
+            let singleLineText = value.replacingOccurrences(of: "\n", with: " ")
+            guard parent.text != singleLineText else { return }
+            parent.text = singleLineText
+        }
+
+        func submit(_ value: String) {
+            updateText(value)
+            parent.onSubmit()
+            parent.focusedField.wrappedValue = .quickAdd
+        }
+
+        func textDidBeginEditing(_ notification: Notification) {
+            parent.focusedField.wrappedValue = .quickAdd
+        }
+
+        func textDidEndEditing(_ notification: Notification) {
+            guard parent.focusedField.wrappedValue == .quickAdd else { return }
+            parent.focusedField.wrappedValue = nil
+        }
+
+        func textDidChange(_ notification: Notification) {
+            guard let textView = notification.object as? QuickAddTextView else { return }
+            textView.notifyTextChanged()
+        }
+
+        func textView(_ textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+            switch commandSelector {
+            case #selector(NSResponder.insertNewline(_:)),
+                 #selector(NSResponder.insertNewlineIgnoringFieldEditor(_:)):
+                submit(textView.string)
+                return true
+            default:
+                return false
+            }
+        }
+    }
+}
+
+private final class QuickAddTextView: NSTextView {
+    var placeholder = ""
+    var placeholderColor = NSColor.secondaryLabelColor
+    var onTextChange: ((String) -> Void)?
+    var onSubmit: ((String) -> Void)?
+    private var isApplyingExternalText = false
+
+    override var acceptsFirstResponder: Bool {
+        true
+    }
+
+    override func keyDown(with event: NSEvent) {
+        if event.keyCode == 36 || event.keyCode == 76 {
+            onSubmit?(string)
+            return
+        }
+        super.keyDown(with: event)
+    }
+
+    override func insertText(_ insertString: Any, replacementRange: NSRange) {
+        super.insertText(insertString, replacementRange: replacementRange)
+        notifyTextChanged()
+    }
+
+    override func setMarkedText(_ string: Any, selectedRange: NSRange, replacementRange: NSRange) {
+        super.setMarkedText(string, selectedRange: selectedRange, replacementRange: replacementRange)
+        notifyTextChanged()
+    }
+
+    override func unmarkText() {
+        super.unmarkText()
+        notifyTextChanged()
+    }
+
+    func setExternalText(_ value: String) {
+        isApplyingExternalText = true
+        string = value
+        isApplyingExternalText = false
+        needsDisplay = true
+    }
+
+    func focusIfPossible() {
+        guard window != nil, window?.firstResponder !== self else { return }
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.window != nil, self.window?.firstResponder !== self else { return }
+            self.window?.makeFirstResponder(self)
+        }
+    }
+
+    func notifyTextChanged() {
+        guard !isApplyingExternalText else { return }
+        onTextChange?(string)
+        needsDisplay = true
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+
+        guard string.isEmpty else { return }
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: font ?? NSFont.systemFont(ofSize: 12.5),
+            .foregroundColor: placeholderColor
+        ]
+        placeholder.draw(at: NSPoint(x: 0, y: textContainerInset.height), withAttributes: attributes)
+    }
+}
+
 private struct QuickAddView: View {
     @Binding var text: String
     let focusedField: FocusState<TaskPanelFocusField?>.Binding
     let onSubmit: () -> Void
     let onMic: () -> Void
 
+    private var hasDraftText: Bool {
+        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func submitDraftFromButton() {
+        onSubmit()
+        focusedField.wrappedValue = .quickAdd
+    }
+
     var body: some View {
         HStack(spacing: 8) {
-            TextField("다음 할 일은?", text: $text)
-                .font(DesignTokens.Typography.input)
-                .foregroundStyle(DesignTokens.Colors.textPrimary)
-                .textFieldStyle(.plain)
-                .focused(focusedField, equals: .quickAdd)
-                .onSubmit(onSubmit)
+            QuickAddTextEditor(
+                text: $text,
+                focusedField: focusedField,
+                onSubmit: onSubmit
+            )
+            .frame(height: 18, alignment: .center)
+            .frame(maxWidth: .infinity, alignment: .leading)
 
-            Button(action: onMic) {
-                Image(systemName: "mic.fill")
+            Button {
+                hasDraftText ? submitDraftFromButton() : onMic()
+            } label: {
+                Image(systemName: hasDraftText ? "arrow.up" : "mic.fill")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(DesignTokens.Colors.onPrimary)
                     .frame(width: DesignTokens.Size.quickAddMic, height: DesignTokens.Size.quickAddMic)
@@ -912,8 +1088,9 @@ private struct QuickAddView: View {
                     )
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("음성 입력")
+            .accessibilityLabel(hasDraftText ? "할 일 추가" : "음성 입력")
         }
+        .animation(.easeOut(duration: 0.12), value: hasDraftText)
         .padding(.leading, 14)
         .padding(.trailing, 7)
         .padding(.vertical, 7)
