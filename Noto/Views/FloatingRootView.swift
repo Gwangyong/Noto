@@ -49,11 +49,14 @@ struct FloatingRootView: View {
                 isDragging: dragStartOrigin != nil,
                 isPressed: isPressing
             )
+            .frame(width: DesignTokens.Size.characterSize, height: DesignTokens.Size.characterSize)
+            .contentShape(Rectangle())
+            .onTapGesture(perform: togglePanel)
+            .gesture(characterDragGesture())
             .position(
                 x: characterLocalOrigin.x + DesignTokens.Size.characterSize / 2,
                 y: characterLocalOrigin.y + DesignTokens.Size.characterSize / 2
             )
-            .gesture(characterGesture())
             .zIndex(2)
         }
         .frame(width: rootContentSize.width, height: rootContentSize.height)
@@ -62,9 +65,10 @@ struct FloatingRootView: View {
         .preferredColorScheme(viewModel.settings.theme.preferredColorScheme)
         .background(
             FloatingWindowAccessor { window in
-                guard floatingWindow !== window else { return }
-                floatingWindow = window
-                configureFloatingWindow(window)
+                if floatingWindow !== window {
+                    floatingWindow = window
+                }
+                updateFloatingWindowLevel(window)
                 updateFloatingWindowLayout()
             }
         )
@@ -80,7 +84,7 @@ struct FloatingRootView: View {
         }
         .onChange(of: viewModel.settings.keepOnTop) { _, _ in
             if let floatingWindow {
-                configureFloatingWindow(floatingWindow)
+                updateFloatingWindowLevel(floatingWindow)
             }
         }
     }
@@ -125,19 +129,8 @@ struct FloatingRootView: View {
             : DesignTokens.Size.panelHeight
     }
 
-    private func configureFloatingWindow(_ window: NSWindow) {
-        window.styleMask = [.borderless, .fullSizeContentView]
-        window.backgroundColor = .clear
-        window.isOpaque = false
-        window.alphaValue = 1
-        window.hasShadow = false
-        window.isMovableByWindowBackground = false
-        window.ignoresMouseEvents = false
-        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+    private func updateFloatingWindowLevel(_ window: NSWindow) {
         window.level = viewModel.settings.keepOnTop ? .floating : NSWindow.Level(rawValue: 0)
-        window.contentView?.wantsLayer = true
-        window.contentView?.layer?.backgroundColor = NSColor.clear.cgColor
-        window.contentView?.layer?.isOpaque = false
     }
 
     private func updateFloatingWindowLayout(animated: Bool = false) {
@@ -195,8 +188,9 @@ struct FloatingRootView: View {
     }
 
     private func contentFrame(characterFrame: CGRect, panelFrame: CGRect?) -> CGRect {
-        let padding: CGFloat = panelFrame == nil ? 8 : 10
+        let padding: CGFloat = 10
         let unionFrame = panelFrame.map { characterFrame.union($0) } ?? characterFrame
+
         return unionFrame
             .insetBy(dx: -padding, dy: -padding)
             .integral
@@ -234,8 +228,15 @@ struct FloatingRootView: View {
         }
     }
 
-    private func characterGesture() -> some Gesture {
-        DragGesture(minimumDistance: 0)
+    private func togglePanel() {
+        withAnimation(.easeOut(duration: DesignTokens.Motion.panelOpenDuration)) {
+            isPanelOpen.toggle()
+        }
+        updateFloatingWindowLayout(animated: true)
+    }
+
+    private func characterDragGesture() -> some Gesture {
+        DragGesture(minimumDistance: 3)
             .updating($isPressing) { _, state, _ in
                 state = true
             }
@@ -276,13 +277,11 @@ struct FloatingRootView: View {
                 dragPointerOffset = nil
 
                 if movedDistance <= 4 {
-                    withAnimation(.easeOut(duration: DesignTokens.Motion.panelOpenDuration)) {
-                        isPanelOpen.toggle()
-                    }
+                    togglePanel()
                 } else {
                     persistCharacterPosition()
+                    updateFloatingWindowLayout(animated: true)
                 }
-                updateFloatingWindowLayout(animated: true)
             }
     }
 }

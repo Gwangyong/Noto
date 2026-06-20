@@ -7,6 +7,8 @@ import SwiftUI
 
 @main
 struct NotoApp: App {
+    private let floatingPanelController = FloatingPanelController()
+
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             TaskItem.self,
@@ -24,7 +26,10 @@ struct NotoApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            FloatingPanelLauncher(
+                modelContainer: sharedModelContainer,
+                panelController: floatingPanelController
+            )
         }
         .modelContainer(sharedModelContainer)
         .windowStyle(.plain)

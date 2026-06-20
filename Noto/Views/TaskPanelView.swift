@@ -1145,6 +1145,10 @@ private struct QuickAddView: View {
             )
             .frame(height: 18, alignment: .center)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                focusedField.wrappedValue = .quickAdd
+            }
 
             Button {
                 hasDraftText ? submitDraftFromButton() : onMic()
