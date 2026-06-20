@@ -189,26 +189,50 @@ private struct TaskHeaderView: View {
     }
 }
 
+// Temporary header mark. Replace with the final app icon or remove if the header reads cleaner without it.
 private struct AppGlyph: View {
     var body: some View {
-        RoundedRectangle(cornerRadius: 7, style: .continuous)
-            .fill(
-                LinearGradient(
-                    colors: [
-                        DesignTokens.Colors.primaryGradientStart,
-                        DesignTokens.Colors.primaryGradientEnd
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
+        ZStack {
+            NotoCharacterBlobShape()
+                .fill(
+                    RadialGradient(
+                        colors: [
+                            DesignTokens.Colors.characterTop,
+                            DesignTokens.Colors.characterMid,
+                            DesignTokens.Colors.characterBottom
+                        ],
+                        center: UnitPoint(x: 0.5, y: 0.16),
+                        startRadius: 1.5,
+                        endRadius: 22
+                    )
                 )
-            )
-            .frame(width: 15, height: 15)
-            .overlay {
+                .overlay {
+                    NotoCharacterBlobShape()
+                        .stroke(Color.white.opacity(0.45), lineWidth: 0.6)
+                        .blendMode(.screen)
+                }
+                .overlay {
+                    NotoCharacterBlobShape()
+                        .stroke(DesignTokens.Colors.hairline.opacity(0.9), lineWidth: 0.7)
+                }
+
+            HStack(spacing: 3.8) {
                 Circle()
-                    .fill(DesignTokens.Colors.onPrimary.opacity(0.92))
-                    .frame(width: 4, height: 4)
+                    .frame(width: 2.3, height: 2.3)
+                Circle()
+                    .frame(width: 2.3, height: 2.3)
             }
-            .shadow(color: Color.black.opacity(0.18), radius: 2, x: 0, y: 1)
+            .foregroundStyle(DesignTokens.Colors.textPrimary)
+            .offset(y: 0.5)
+
+            Capsule()
+                .fill(DesignTokens.Colors.textPrimary.opacity(0.48))
+                .frame(width: 3.8, height: 0.8)
+                .offset(y: 5.2)
+        }
+        .frame(width: 18, height: 18)
+        .shadow(color: Color.black.opacity(0.10), radius: 1.6, x: 0, y: 0.8)
+        .accessibilityHidden(true)
     }
 }
 
