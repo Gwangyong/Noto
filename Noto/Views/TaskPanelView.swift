@@ -95,7 +95,7 @@ struct TaskPanelView: View {
                                     onToggle: { viewModel.toggleDone(task) },
                                     onEdit: { viewModel.beginEditing(task) },
                                     onCommitEdit: { title in viewModel.commitEditing(task, title: title) },
-                                    onDelete: { viewModel.showDeletingState(task) }
+                                    onDelete: { viewModel.deleteTask(task) }
                                 )
                                 .id(task.id)
                             }
@@ -808,8 +808,9 @@ private struct TaskRowView: View {
             .allowsHitTesting(showsActions)
         }
         .padding(7)
-        .frame(minHeight: 35, alignment: .center)
+        .frame(maxWidth: .infinity, minHeight: 35, alignment: .center)
         .background(rowBackground)
+        .contentShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.lg, style: .continuous))
         .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.lg, style: .continuous))
         .onHover { isHovering = $0 }
         .onChange(of: isEditing) { _, newValue in
@@ -1142,31 +1143,22 @@ private struct DeleteAllConfirmView: View {
                 }
 
                 HStack(spacing: 8) {
-                    Button("취소", action: onCancel)
-                        .font(DesignTokens.Typography.secondaryButton)
-                        .foregroundStyle(DesignTokens.Colors.primaryDeep)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: DesignTokens.Size.modalButtonHeight)
-                        .background(
-                            RoundedRectangle(cornerRadius: DesignTokens.Radius.lg, style: .continuous)
-                                .fill(DesignTokens.Colors.modalSecondaryButtonSurface)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: DesignTokens.Radius.lg, style: .continuous)
-                                        .stroke(DesignTokens.Colors.hairline, lineWidth: 1)
-                                )
-                        )
-                        .buttonStyle(.plain)
+                    ModalActionButton(
+                        title: "취소",
+                        font: DesignTokens.Typography.secondaryButton,
+                        foreground: DesignTokens.Colors.primaryDeep,
+                        background: DesignTokens.Colors.modalSecondaryButtonSurface,
+                        stroke: DesignTokens.Colors.hairline,
+                        action: onCancel
+                    )
 
-                    Button("삭제", action: onDelete)
-                        .font(DesignTokens.Typography.button)
-                        .foregroundStyle(DesignTokens.Colors.onDestructive)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: DesignTokens.Size.modalButtonHeight)
-                        .background(
-                            RoundedRectangle(cornerRadius: DesignTokens.Radius.lg, style: .continuous)
-                                .fill(DesignTokens.Colors.destructive)
-                        )
-                        .buttonStyle(.plain)
+                    ModalActionButton(
+                        title: "삭제",
+                        font: DesignTokens.Typography.button,
+                        foreground: DesignTokens.Colors.onDestructive,
+                        background: DesignTokens.Colors.destructive,
+                        action: onDelete
+                    )
                 }
             }
             .padding(.horizontal, DesignTokens.Spacing.xl)
@@ -1183,6 +1175,38 @@ private struct DeleteAllConfirmView: View {
                     .shadow(color: Color.black.opacity(0.40), radius: 50, x: 0, y: 24)
             )
         }
+    }
+}
+
+private struct ModalActionButton: View {
+    let title: String
+    let font: Font
+    let foreground: Color
+    let background: Color
+    var stroke: Color?
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(font)
+                .foregroundStyle(foreground)
+                .frame(maxWidth: .infinity)
+                .frame(height: DesignTokens.Size.modalButtonHeight)
+                .background(
+                    RoundedRectangle(cornerRadius: DesignTokens.Radius.lg, style: .continuous)
+                        .fill(background)
+                        .overlay {
+                            if let stroke {
+                                RoundedRectangle(cornerRadius: DesignTokens.Radius.lg, style: .continuous)
+                                    .stroke(stroke, lineWidth: 1)
+                            }
+                        }
+                )
+                .contentShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.lg, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity)
     }
 }
 

@@ -92,6 +92,16 @@ final class TaskPanelViewModel: ObservableObject {
         editingTaskID = nil
     }
 
+    func deleteTask(_ task: SampleTask) {
+        tasks.removeAll { $0.id == task.id }
+        if editingTaskID == task.id {
+            editingTaskID = nil
+        }
+        if deletingTaskID == task.id {
+            deletingTaskID = nil
+        }
+    }
+
     func addQuickTask() {
         let trimmed = quickAddText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
