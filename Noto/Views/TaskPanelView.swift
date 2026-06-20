@@ -78,28 +78,31 @@ struct TaskPanelView: View {
                 .padding(.horizontal, DesignTokens.Spacing.lg)
                 .padding(.top, 8)
 
-            VStack(spacing: 3) {
-                if viewModel.tasks.isEmpty {
-                    EmptyTaskListView()
-                        .padding(.top, 24)
-                } else {
-                    ForEach(viewModel.tasks) { task in
-                        TaskRowView(
-                            task: task,
-                            isEditing: viewModel.editingTaskID == task.id,
-                            isDeleting: viewModel.deletingTaskID == task.id,
-                            onToggle: { viewModel.toggleDone(task) },
-                            onEdit: { viewModel.beginEditing(task) },
-                            onCommitEdit: { title in viewModel.commitEditing(task, title: title) },
-                            onDelete: { viewModel.showDeletingState(task) }
-                        )
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 3) {
+                    if viewModel.tasks.isEmpty {
+                        EmptyTaskListView()
+                            .padding(.top, 24)
+                    } else {
+                        ForEach(viewModel.tasks) { task in
+                            TaskRowView(
+                                task: task,
+                                isEditing: viewModel.editingTaskID == task.id,
+                                isDeleting: viewModel.deletingTaskID == task.id,
+                                onToggle: { viewModel.toggleDone(task) },
+                                onEdit: { viewModel.beginEditing(task) },
+                                onCommitEdit: { title in viewModel.commitEditing(task, title: title) },
+                                onDelete: { viewModel.showDeletingState(task) }
+                            )
+                        }
                     }
                 }
-
-                Spacer(minLength: 0)
+                .frame(maxWidth: .infinity, alignment: .top)
+                .padding(.horizontal, 10)
+                .padding(.top, 12)
+                .padding(.bottom, 12)
             }
-            .padding(.horizontal, 10)
-            .padding(.top, 12)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             QuickAddView(
                 text: $viewModel.quickAddText,
@@ -502,7 +505,7 @@ private struct TaskRowView: View {
     }
 
     var body: some View {
-        HStack(spacing: 7) {
+        HStack(alignment: .center, spacing: 7) {
             Group {
                 if showsActions {
                     Image(systemName: "line.3.horizontal")
@@ -525,6 +528,7 @@ private struct TaskRowView: View {
                     .foregroundStyle(DesignTokens.Colors.textPrimary)
                     .textFieldStyle(.plain)
                     .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .onSubmit {
                         onCommitEdit(draftTitle)
                     }
@@ -539,25 +543,29 @@ private struct TaskRowView: View {
                     .font(DesignTokens.Typography.body)
                     .foregroundStyle(task.isDone ? DesignTokens.Colors.textCompleted : DesignTokens.Colors.textPrimary)
                     .strikethrough(task.isDone, color: DesignTokens.Colors.textCompleted)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+                    .lineLimit(nil)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .layoutPriority(1)
             }
 
-            Spacer(minLength: 4)
-
-            if showsActions {
-                HStack(spacing: 4) {
-                    if !isEditing && !task.isDone {
-                        RowIconButton(systemName: "pencil", color: DesignTokens.Colors.primary, action: onEdit)
-                    }
-
-                    RowIconButton(systemName: "trash", color: DesignTokens.Colors.destructive, action: onDelete)
+            HStack(spacing: 4) {
+                if !isEditing && !task.isDone {
+                    RowIconButton(systemName: "pencil", color: DesignTokens.Colors.primary, action: onEdit)
+                } else {
+                    Color.clear
+                        .frame(width: 22, height: 22)
                 }
-                .transition(.opacity)
+
+                RowIconButton(systemName: "trash", color: DesignTokens.Colors.destructive, action: onDelete)
             }
+            .frame(width: 48, alignment: .trailing)
+            .opacity(showsActions ? 1 : 0)
+            .allowsHitTesting(showsActions)
         }
         .padding(7)
-        .frame(height: 35)
+        .frame(minHeight: 35, alignment: .center)
         .background(rowBackground)
         .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.lg, style: .continuous))
         .onHover { isHovering = $0 }
