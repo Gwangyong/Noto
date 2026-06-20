@@ -9,7 +9,6 @@ import SwiftUI
 enum DesignTokens {
     enum Colors {
         static let panelSurface = Color(light: 0xF9F7F2, dark: 0x201F1C)
-        static let panelSurfaceGlass = Color(light: 0xF9F7F2, dark: 0x201F1C, lightOpacity: 0.92, darkOpacity: 0.94)
 
         static let characterTop = Color(light: 0xFFFEFB, dark: 0xFFFEFB)
         static let characterMid = Color(light: 0xF4F0E7, dark: 0xF4F0E7)

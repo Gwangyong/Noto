@@ -42,8 +42,7 @@ struct TaskPanelView: View {
                 RoundedRectangle(cornerRadius: DesignTokens.Radius.panel, style: .continuous)
                     .stroke(DesignTokens.Colors.hairline, lineWidth: 0.6)
             )
-            .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
-            .shadow(color: Color.black.opacity(0.30), radius: 44, x: 0, y: 20)
+            .shadow(color: Color.black.opacity(0.05), radius: 3, x: 0, y: 1)
             .blur(radius: viewModel.showingDeleteAllConfirm ? 4 : 0)
             .allowsHitTesting(!viewModel.showingDeleteAllConfirm)
 
@@ -169,8 +168,7 @@ struct TaskPanelView: View {
 
     private var panelSurface: some View {
         RoundedRectangle(cornerRadius: DesignTokens.Radius.panel, style: .continuous)
-            .fill(DesignTokens.Colors.panelSurfaceGlass)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.panel, style: .continuous))
+            .fill(DesignTokens.Colors.panelSurface)
     }
 }
 

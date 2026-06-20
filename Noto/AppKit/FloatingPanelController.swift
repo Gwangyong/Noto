@@ -20,7 +20,7 @@ final class FloatingPanelController {
 
         let rootView = FloatingRootView()
             .modelContainer(modelContainer)
-        let hostingView = FirstMouseHostingView(rootView: rootView)
+        let hostingView = TransparentHostingView(rootView: rootView)
         let visibleFrame = NSScreen.main?.visibleFrame ?? CGRect(x: 0, y: 0, width: 420, height: 488)
         let initialFrame = CGRect(
             x: visibleFrame.midX - 210,
@@ -48,12 +48,6 @@ final class FloatingPanelController {
         panel.ignoresMouseEvents = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.level = .floating
-        panel.contentView?.wantsLayer = true
-        panel.contentView?.layer?.backgroundColor = NSColor.clear.cgColor
-        panel.contentView?.layer?.isOpaque = false
-        panel.contentView?.superview?.wantsLayer = true
-        panel.contentView?.superview?.layer?.backgroundColor = NSColor.clear.cgColor
-        panel.contentView?.superview?.layer?.isOpaque = false
         panel.orderFrontRegardless()
         panel.makeKey()
 
@@ -84,9 +78,33 @@ struct FloatingPanelLauncher: View {
     }
 }
 
-private final class FirstMouseHostingView<Content: View>: NSHostingView<Content> {
+private final class TransparentHostingView<Content: View>: NSHostingView<Content> {
+    override var isOpaque: Bool {
+        false
+    }
+
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
         true
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        configureTransparentLayerChain()
+    }
+
+    override func viewDidMoveToSuperview() {
+        super.viewDidMoveToSuperview()
+        configureTransparentLayerChain()
+    }
+
+    private func configureTransparentLayerChain() {
+        var view: NSView? = self
+        while let currentView = view {
+            currentView.wantsLayer = true
+            currentView.layer?.backgroundColor = NSColor.clear.cgColor
+            currentView.layer?.isOpaque = false
+            view = currentView.superview
+        }
     }
 }
 

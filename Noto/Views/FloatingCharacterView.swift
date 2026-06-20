@@ -37,7 +37,7 @@ struct FloatingCharacterView: View {
                         .background(
                             Capsule()
                                 .fill(DesignTokens.Colors.primary)
-                                .shadow(color: Color.black.opacity(0.18), radius: 7, x: 0, y: 3)
+                                .shadow(color: Color.black.opacity(0.08), radius: 2, x: 0, y: 1)
                         )
                         .overlay(
                             Capsule()
@@ -78,8 +78,7 @@ struct FloatingCharacterView: View {
                     NotoCharacterBlobShape()
                         .stroke(DesignTokens.Colors.characterHairline, lineWidth: 1)
                 }
-                .shadow(color: Color.black.opacity(0.10), radius: 2, x: 0, y: 1)
-                .shadow(color: Color.black.opacity(0.24), radius: 18, x: 0, y: 8)
+                .shadow(color: Color.black.opacity(0.08), radius: 4, x: 0, y: 2)
 
             face(eyeScale: eyeScale)
 
