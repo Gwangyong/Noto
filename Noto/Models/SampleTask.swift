@@ -38,7 +38,7 @@ struct TaskPanelSettings: Equatable {
     }
 }
 
-enum TaskPanelScreen {
+enum TaskPanelScreen: Equatable {
     case list
     case settings
 }

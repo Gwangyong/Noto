@@ -27,5 +27,8 @@ struct NotoApp: App {
             ContentView()
         }
         .modelContainer(sharedModelContainer)
+        .windowStyle(.plain)
+        .windowResizability(.contentSize)
+        .restorationBehavior(.disabled)
     }
 }

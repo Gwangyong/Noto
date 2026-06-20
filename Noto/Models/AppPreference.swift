@@ -13,6 +13,8 @@ final class AppPreference {
     var keepOnTop: Bool
     var completionSound: Bool
     var themeRawValue: String
+    var characterOriginX: Double?
+    var characterOriginY: Double?
     var updatedAt: Date
 
     init(
@@ -21,6 +23,8 @@ final class AppPreference {
         keepOnTop: Bool = true,
         completionSound: Bool = false,
         theme: TaskPanelSettings.Theme = .system,
+        characterOriginX: Double? = nil,
+        characterOriginY: Double? = nil,
         updatedAt: Date = .now
     ) {
         self.key = key
@@ -28,6 +32,8 @@ final class AppPreference {
         self.keepOnTop = keepOnTop
         self.completionSound = completionSound
         self.themeRawValue = theme.rawValue
+        self.characterOriginX = characterOriginX
+        self.characterOriginY = characterOriginY
         self.updatedAt = updatedAt
     }
 

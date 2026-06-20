@@ -4,6 +4,7 @@
 //
 
 import Foundation
+import CoreGraphics
 import SwiftData
 
 @MainActor
@@ -56,6 +57,25 @@ final class TaskPanelStore {
         preference.updatedAt = .now
 
         try saveTasks(snapshot.tasks)
+        try modelContext.save()
+    }
+
+    func loadCharacterOrigin() throws -> CGPoint? {
+        guard let preference = try appPreference(),
+              let x = preference.characterOriginX,
+              let y = preference.characterOriginY
+        else {
+            return nil
+        }
+
+        return CGPoint(x: CGFloat(x), y: CGFloat(y))
+    }
+
+    func saveCharacterOrigin(_ origin: CGPoint, settings: TaskPanelSettings) throws {
+        let preference = try appPreference() ?? insertAppPreference(settings: settings)
+        preference.characterOriginX = Double(origin.x)
+        preference.characterOriginY = Double(origin.y)
+        preference.updatedAt = .now
         try modelContext.save()
     }
 
