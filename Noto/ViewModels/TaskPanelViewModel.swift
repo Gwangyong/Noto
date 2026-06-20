@@ -39,7 +39,10 @@ final class TaskPanelViewModel: ObservableObject {
     var progress: Int {
         guard !tasks.isEmpty else { return 0 }
         let doneCount = tasks.filter(\.isDone).count
-        return Int((Double(doneCount) / Double(tasks.count) * 100).rounded())
+        guard doneCount < tasks.count else { return 100 }
+
+        let roundedProgress = Int((Double(doneCount) / Double(tasks.count) * 100).rounded())
+        return min(99, roundedProgress)
     }
 
     var remainingCount: Int {

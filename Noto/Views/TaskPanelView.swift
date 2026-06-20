@@ -790,8 +790,10 @@ private struct TaskRowView: View {
 
             Button(action: onToggle) {
                 CheckboxView(isDone: task.isDone)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .contentShape(Rectangle())
 
             if isEditing {
                 InlineTaskTitleEditor(text: task.title, measuredHeight: $draftTitleHeight) { title in
