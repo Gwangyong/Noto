@@ -69,12 +69,6 @@ struct FloatingCharacterView: View {
                         endRadius: 74
                     )
                 )
-                .overlay(alignment: .top) {
-                    Capsule()
-                        .fill(Color.white.opacity(0.72))
-                        .frame(width: 28, height: 2)
-                        .padding(.top, 7)
-                }
                 .overlay {
                     NotoCharacterBlobShape()
                         .stroke(Color.white.opacity(0.55), lineWidth: 1)
