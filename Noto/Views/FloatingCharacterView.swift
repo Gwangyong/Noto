@@ -155,7 +155,7 @@ struct FloatingCharacterView: View {
     }
 }
 
-struct NotoCharacterBlobShape: Shape {
+private struct NotoCharacterBlobShape: Shape {
     func path(in rect: CGRect) -> Path {
         let width = rect.width
         let height = rect.height
