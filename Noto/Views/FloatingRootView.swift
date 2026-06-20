@@ -13,6 +13,7 @@ struct FloatingRootView: View {
     @StateObject private var hotKeyService = GlobalHotKeyService()
     @State private var isPanelOpen = true
     @State private var isRecordingHotKey = false
+    @State private var systemColorScheme = TaskPanelSettings.Theme.currentSystemColorScheme
     @State private var characterScreenOrigin = CGPoint(x: 72, y: 74)
     @State private var characterLocalOrigin = CGPoint(x: 28, y: 28)
     @State private var panelLocalOrigin = CGPoint(x: 98, y: 28)
@@ -63,18 +64,23 @@ struct FloatingRootView: View {
         .frame(width: rootContentSize.width, height: rootContentSize.height)
         .background(Color.clear)
         .containerBackground(.clear, for: .window)
-        .preferredColorScheme(viewModel.settings.theme.preferredColorScheme)
+        .preferredColorScheme(viewModel.settings.theme.resolvedColorScheme(systemColorScheme: systemColorScheme))
         .background(
             FloatingWindowAccessor { window in
                 if floatingWindow !== window {
                     floatingWindow = window
                 }
+                updateFloatingWindowAppearance(window)
                 updateFloatingWindowLevel(window)
                 updateFloatingWindowLayout()
             }
         )
         .onAppear {
+            updateSystemColorScheme()
             configurePersistenceIfNeeded()
+            if let floatingWindow {
+                updateFloatingWindowAppearance(floatingWindow)
+            }
             updateFloatingWindowLayout()
             updateGlobalHotKeyRegistration()
         }
@@ -92,6 +98,17 @@ struct FloatingRootView: View {
             if let floatingWindow {
                 updateFloatingWindowLevel(floatingWindow)
                 bringFloatingWindowForward()
+            }
+        }
+        .onChange(of: viewModel.settings.theme) { _, _ in
+            if let floatingWindow {
+                updateFloatingWindowAppearance(floatingWindow)
+            }
+        }
+        .onReceive(DistributedNotificationCenter.default().publisher(for: .appleInterfaceThemeChanged)) { _ in
+            updateSystemColorScheme()
+            if let floatingWindow {
+                updateFloatingWindowAppearance(floatingWindow)
             }
         }
         .onChange(of: viewModel.settings.hotKey) { _, _ in
@@ -114,6 +131,9 @@ struct FloatingRootView: View {
         do {
             let snapshot = try store.loadOrSeed(default: viewModel.snapshot)
             viewModel.applySnapshot(snapshot)
+            if let floatingWindow {
+                updateFloatingWindowAppearance(floatingWindow)
+            }
 
             if let storedOrigin = try store.loadCharacterOrigin() {
                 characterScreenOrigin = storedOrigin
@@ -147,6 +167,16 @@ struct FloatingRootView: View {
 
     private func updateFloatingWindowLevel(_ window: NSWindow) {
         window.level = viewModel.settings.keepOnTop ? .floating : .normal
+    }
+
+    private func updateFloatingWindowAppearance(_ window: NSWindow) {
+        let appearance = viewModel.settings.theme.nsAppearance(systemColorScheme: systemColorScheme)
+        window.appearance = appearance
+        window.contentView?.appearance = appearance
+    }
+
+    private func updateSystemColorScheme() {
+        systemColorScheme = TaskPanelSettings.Theme.currentSystemColorScheme
     }
 
     private func updateGlobalHotKeyRegistration() {
@@ -362,16 +392,34 @@ struct FloatingRootView: View {
 }
 
 private extension TaskPanelSettings.Theme {
-    var preferredColorScheme: ColorScheme? {
+    func resolvedColorScheme(systemColorScheme: ColorScheme) -> ColorScheme {
         switch self {
         case .system:
-            return nil
+            return systemColorScheme
         case .light:
             return .light
         case .dark:
             return .dark
         }
     }
+
+    func nsAppearance(systemColorScheme: ColorScheme) -> NSAppearance? {
+        NSAppearance(named: resolvedColorScheme(systemColorScheme: systemColorScheme).nsAppearanceName)
+    }
+
+    static var currentSystemColorScheme: ColorScheme {
+        UserDefaults.standard.string(forKey: "AppleInterfaceStyle") == "Dark" ? .dark : .light
+    }
+}
+
+private extension ColorScheme {
+    var nsAppearanceName: NSAppearance.Name {
+        self == .dark ? .darkAqua : .aqua
+    }
+}
+
+private extension Notification.Name {
+    static let appleInterfaceThemeChanged = Notification.Name("AppleInterfaceThemeChangedNotification")
 }
 
 #Preview {
