@@ -1676,6 +1676,8 @@ private struct ModalActionButton: View {
 }
 
 private struct SettingsPanelView: View {
+    private static let feedbackURL = URL(string: "https://docs.google.com/forms/d/e/1FAIpQLSdjJzn9EhJdAtv8fqYKtTJnfdCpFq27B5F9sVvplzm2W9aKxQ/viewform")
+
     let settings: TaskPanelSettings
     let onBack: () -> Void
     let onCollapse: () -> Void
@@ -1734,7 +1736,7 @@ private struct SettingsPanelView: View {
                         .padding(.top, 13)
 
                     SupportSectionView(
-                        onFeedback: {},
+                        onFeedback: openFeedbackForm,
                         onShare: {},
                         onRate: {}
                     )
@@ -1754,6 +1756,15 @@ private struct SettingsPanelView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+    }
+
+    private func openFeedbackForm() {
+        guard let feedbackURL = Self.feedbackURL else {
+            NSSound.beep()
+            return
+        }
+
+        NSWorkspace.shared.open(feedbackURL)
     }
 }
 
