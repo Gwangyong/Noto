@@ -70,8 +70,9 @@ enum DesignTokens {
     }
 
     enum Typography {
-        private static let sansFamily = "IBM Plex Sans KR"
-        private static let monoFamily = "IBM Plex Mono"
+        private static let regular = ["Pretendard-Regular", "Pretendard"]
+        private static let medium = ["Pretendard-Medium", "Pretendard"]
+        private static let semiBold = ["Pretendard-SemiBold", "Pretendard"]
 
         static let display = sans(size: 34, weight: .semibold)
         static let panelTitle = sans(size: 15, weight: .semibold)
@@ -82,17 +83,57 @@ enum DesignTokens {
         static let secondaryButton = sans(size: 13, weight: .medium)
         static let modalTitle = sans(size: 14.5, weight: .semibold)
         static let modalBody = sans(size: 12, weight: .regular)
-        static let labelMono = mono(size: 9, weight: .medium)
-        static let percent = mono(size: 15, weight: .semibold)
-        static let badge = mono(size: 10.5, weight: .semibold)
-        static let settingsMeta = mono(size: 10, weight: .regular)
+        static let label = sans(size: 9, weight: .medium)
+        static let percent = sans(size: 15, weight: .semibold)
+        static let badge = sans(size: 10.5, weight: .semibold)
+        static let settingsMeta = sans(size: 10, weight: .regular)
 
         static func sans(size: CGFloat, weight: Font.Weight) -> Font {
-            .custom(sansFamily, size: size).weight(weight)
+            if let font = customFont(from: candidates(for: weight), size: size) {
+                return font
+            }
+
+            return .system(size: size, weight: weight, design: .default)
         }
 
-        static func mono(size: CGFloat, weight: Font.Weight) -> Font {
-            .custom(monoFamily, size: size).weight(weight)
+        static func appKitFont(size: CGFloat, weight: NSFont.Weight) -> NSFont {
+            for name in appKitCandidates(for: weight) {
+                if let font = NSFont(name: name, size: size) {
+                    return font
+                }
+            }
+
+            return .systemFont(ofSize: size, weight: weight)
+        }
+
+        private static func customFont(from names: [String], size: CGFloat) -> Font? {
+            for name in names where NSFont(name: name, size: size) != nil {
+                return .custom(name, size: size)
+            }
+
+            return nil
+        }
+
+        private static func candidates(for weight: Font.Weight) -> [String] {
+            if weight == .semibold {
+                return semiBold + medium + regular
+            }
+            if weight == .medium {
+                return medium + regular
+            }
+
+            return regular
+        }
+
+        private static func appKitCandidates(for weight: NSFont.Weight) -> [String] {
+            if weight == .semibold || weight == .bold {
+                return semiBold + medium + regular
+            }
+            if weight == .medium {
+                return medium + regular
+            }
+
+            return regular
         }
     }
 

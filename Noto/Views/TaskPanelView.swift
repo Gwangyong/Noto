@@ -285,6 +285,21 @@ private struct HeaderIconButton: View {
     }
 }
 
+private struct PanelSectionLabel: View {
+    let title: String
+    let meta: String
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Text(title)
+            Text("·")
+            Text(meta)
+        }
+        .font(DesignTokens.Typography.label)
+        .foregroundStyle(DesignTokens.Colors.labelMuted)
+    }
+}
+
 private struct GoalInputView: View {
     @Binding var goal: String
     @Binding var isEditing: Bool
@@ -292,9 +307,7 @@ private struct GoalInputView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
-            Text("목표 · GOAL")
-                .font(DesignTokens.Typography.labelMono)
-                .foregroundStyle(DesignTokens.Colors.labelMuted)
+            PanelSectionLabel(title: "목표", meta: "GOAL")
 
             InlineGoalTextView(text: $goal, isEditing: $isEditing, onCommit: onCommit)
                 .frame(height: 18, alignment: .center)
@@ -315,8 +328,7 @@ private struct InlineGoalTextView: NSViewRepresentable {
         let textView = GoalTextView()
         textView.delegate = context.coordinator
         textView.placeholder = "오늘의 목표를 입력하세요"
-        textView.font = NSFont(name: "IBM Plex Sans KR", size: 13.5)
-            ?? .systemFont(ofSize: 13.5, weight: .medium)
+        textView.font = DesignTokens.Typography.appKitFont(size: 13.5, weight: .medium)
         textView.textColor = DesignTokens.AppKitColors.textPrimary
         textView.placeholderColor = DesignTokens.AppKitColors.goalPlaceholder
         textView.insertionPointColor = DesignTokens.AppKitColors.insertionPoint
@@ -603,9 +615,7 @@ private struct ProgressSummaryView: View {
     var body: some View {
         VStack(spacing: 8) {
             HStack {
-                Text("오늘의 집중도 · FOCUS")
-                    .font(DesignTokens.Typography.labelMono)
-                    .foregroundStyle(DesignTokens.Colors.labelMuted)
+                PanelSectionLabel(title: "오늘의 집중도", meta: "FOCUS")
 
                 Spacer()
 
@@ -648,8 +658,7 @@ private struct InlineTaskTitleEditor: NSViewRepresentable {
 
     func makeNSView(context: Context) -> TaskTitleTextView {
         let textView = TaskTitleTextView()
-        let textFont = NSFont(name: "IBM Plex Sans KR", size: 13)
-            ?? .systemFont(ofSize: 13, weight: .regular)
+        let textFont = DesignTokens.Typography.appKitFont(size: 13, weight: .regular)
         let textColor = DesignTokens.AppKitColors.textPrimary
 
         textView.delegate = context.coordinator
@@ -1094,8 +1103,7 @@ private struct QuickAddTextEditor: NSViewRepresentable {
         textView.delegate = context.coordinator
         textView.placeholder = placeholder
         textView.placeholderColor = DesignTokens.AppKitColors.placeholder
-        textView.font = NSFont(name: "IBM Plex Sans KR", size: 12.5)
-            ?? .systemFont(ofSize: 12.5, weight: .regular)
+        textView.font = DesignTokens.Typography.appKitFont(size: 12.5, weight: .regular)
         textView.textColor = DesignTokens.AppKitColors.textPrimary
         textView.insertionPointColor = DesignTokens.AppKitColors.insertionPoint
         textView.drawsBackground = false
@@ -1740,7 +1748,7 @@ private struct SettingsPanelView: View {
                     .foregroundStyle(DesignTokens.Colors.textPrimary)
 
                 Text("SETTINGS")
-                    .font(DesignTokens.Typography.labelMono)
+                    .font(DesignTokens.Typography.label)
                     .foregroundStyle(DesignTokens.Colors.labelQuiet)
                     .padding(.leading, 2)
 
@@ -1882,7 +1890,7 @@ private struct ThemePickerRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
             Text("테마 · THEME")
-                .font(DesignTokens.Typography.labelMono)
+                .font(DesignTokens.Typography.label)
                 .foregroundStyle(DesignTokens.Colors.labelMuted)
 
             HStack(spacing: 0) {
@@ -2110,7 +2118,7 @@ private struct SettingsSectionLabel: View {
 
     var body: some View {
         Text("\(title)  ·  \(meta)")
-            .font(DesignTokens.Typography.labelMono)
+            .font(DesignTokens.Typography.label)
             .foregroundStyle(DesignTokens.Colors.labelMuted)
     }
 }

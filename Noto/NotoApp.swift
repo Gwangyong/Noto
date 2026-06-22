@@ -9,6 +9,10 @@ import SwiftUI
 struct NotoApp: App {
     private let floatingPanelController = FloatingPanelController()
 
+    init() {
+        AppFontRegistrar.registerBundledFonts()
+    }
+
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             TaskItem.self,
