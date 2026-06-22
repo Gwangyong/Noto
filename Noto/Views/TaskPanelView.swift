@@ -305,6 +305,8 @@ private struct GoalInputView: View {
 }
 
 private struct InlineGoalTextView: NSViewRepresentable {
+    private static let maxGoalLength = 25
+
     @Binding var text: String
     @Binding var isEditing: Bool
     var onCommit: () -> Void = {}
@@ -340,15 +342,21 @@ private struct InlineGoalTextView: NSViewRepresentable {
         textView.onCommit = {
             context.coordinator.commitEditing()
         }
-        textView.setExternalText(text)
+        textView.setExternalText(Self.limitedGoalText(text))
         context.coordinator.configure(textView)
         return textView
     }
 
     func updateNSView(_ nsView: GoalTextView, context: Context) {
         context.coordinator.parent = self
-        if !isEditing && nsView.string != text {
-            nsView.setExternalText(text)
+        let limitedText = Self.limitedGoalText(text)
+        if limitedText != text {
+            DispatchQueue.main.async {
+                context.coordinator.updateText(limitedText)
+            }
+        }
+        if !isEditing && nsView.string != limitedText {
+            nsView.setExternalText(limitedText)
         }
         context.coordinator.configure(nsView)
     }
@@ -383,7 +391,9 @@ private struct InlineGoalTextView: NSViewRepresentable {
         }
 
         func updateText(_ value: String) {
-            let singleLineText = value.replacingOccurrences(of: "\n", with: " ")
+            let singleLineText = InlineGoalTextView.limitedGoalText(
+                value.replacingOccurrences(of: "\n", with: " ")
+            )
             guard parent.text != singleLineText else { return }
             parent.text = singleLineText
         }
@@ -427,6 +437,28 @@ private struct InlineGoalTextView: NSViewRepresentable {
             }
         }
 
+        func textView(_ textView: NSTextView, shouldChangeTextIn affectedCharRange: NSRange, replacementString: String?) -> Bool {
+            guard let replacementString,
+                  let currentRange = Range(affectedCharRange, in: textView.string)
+            else { return true }
+
+            let replacementText = replacementString.replacingOccurrences(of: "\n", with: " ")
+            let nextText = textView.string.replacingCharacters(
+                in: currentRange,
+                with: replacementText
+            )
+            guard nextText.count > InlineGoalTextView.maxGoalLength else { return true }
+
+            let replacedText = String(textView.string[currentRange])
+            let availableCount = InlineGoalTextView.maxGoalLength - (textView.string.count - replacedText.count)
+            guard availableCount > 0,
+                  let goalTextView = textView as? GoalTextView
+            else { return false }
+
+            goalTextView.replaceText(in: affectedCharRange, with: String(replacementText.prefix(availableCount)))
+            return false
+        }
+
         func textView(_ textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
             switch commandSelector {
             case #selector(NSResponder.insertNewline(_:)),
@@ -441,6 +473,10 @@ private struct InlineGoalTextView: NSViewRepresentable {
         private func updateBindingState(_ update: @escaping () -> Void) {
             DispatchQueue.main.async(execute: update)
         }
+    }
+
+    private static func limitedGoalText(_ value: String) -> String {
+        String(value.prefix(maxGoalLength))
     }
 }
 
@@ -500,6 +536,12 @@ private final class GoalTextView: NSTextView {
         guard !isApplyingExternalText else { return }
         onTextChange?(string)
         needsDisplay = true
+    }
+
+    func replaceText(in range: NSRange, with value: String) {
+        textStorage?.replaceCharacters(in: range, with: value)
+        setSelectedRange(NSRange(location: range.location + (value as NSString).length, length: 0))
+        notifyTextChanged()
     }
 
     func startOutsideClickMonitoring() {

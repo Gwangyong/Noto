@@ -78,7 +78,20 @@ struct FloatingPanelLauncher: View {
     }
 }
 
-private final class TransparentHostingView<Content: View>: NSHostingView<Content> {
+private final class TransparentHostingView: NSHostingView<AnyView> {
+    init<Content: View>(rootView: Content) {
+        super.init(rootView: AnyView(rootView))
+    }
+
+    required init(rootView: AnyView) {
+        super.init(rootView: rootView)
+    }
+
+    @available(*, unavailable)
+    required dynamic init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
     override var isOpaque: Bool {
         false
     }
