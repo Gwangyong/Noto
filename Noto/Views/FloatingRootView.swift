@@ -15,6 +15,7 @@ struct FloatingRootView: View {
     private let launchAtLoginService = LaunchAtLoginService()
     private let completionSoundService = CompletionSoundService()
     @State private var isPanelOpen = true
+    @State private var isPanelPresentedByHotKey = false
     @State private var isRecordingHotKey = false
     @State private var systemColorScheme = TaskPanelSettings.Theme.currentSystemColorScheme
     @State private var characterScreenOrigin = CGPoint(x: 72, y: 74)
@@ -321,6 +322,7 @@ struct FloatingRootView: View {
     }
 
     private func togglePanel() {
+        isPanelPresentedByHotKey = false
         setPanelOpen(!isPanelOpen, activateAppWhenOpening: true)
     }
 
@@ -375,15 +377,23 @@ struct FloatingRootView: View {
     }
 
     private func handleHotKeyTrigger() {
-        if isPanelOpen,
-           !viewModel.settings.keepOnTop,
+        guard isPanelOpen else {
+            isPanelPresentedByHotKey = true
+            setPanelOpen(true, activateAppWhenOpening: true)
+            return
+        }
+
+        if !viewModel.settings.keepOnTop,
+           !isPanelPresentedByHotKey,
            NSApp.isActive == false || floatingWindow?.isKeyWindow == false {
+            isPanelPresentedByHotKey = true
             bringFloatingWindowForward(activateApp: true)
             updateFloatingWindowLayout(animated: false)
             return
         }
 
-        togglePanel()
+        isPanelPresentedByHotKey = false
+        setPanelOpen(false)
     }
 
     private func setPanelOpen(_ isOpen: Bool, activateAppWhenOpening: Bool = false) {
@@ -401,6 +411,7 @@ struct FloatingRootView: View {
             if isOpen {
                 viewModel.showList()
             } else {
+                isPanelPresentedByHotKey = false
                 if speechInputService.isRecording {
                     stopSpeechInputPreservingText()
                 } else {
