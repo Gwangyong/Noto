@@ -11,6 +11,9 @@ struct FloatingRootView: View {
     @Environment(\.modelContext) private var modelContext
     @StateObject private var viewModel = TaskPanelViewModel.sample()
     @StateObject private var hotKeyService = GlobalHotKeyService()
+    @StateObject private var speechInputService = SpeechInputService()
+    private let launchAtLoginService = LaunchAtLoginService()
+    private let completionSoundService = CompletionSoundService()
     @State private var isPanelOpen = true
     @State private var isRecordingHotKey = false
     @State private var systemColorScheme = TaskPanelSettings.Theme.currentSystemColorScheme
@@ -32,7 +35,12 @@ struct FloatingRootView: View {
             if isPanelOpen {
                 TaskPanelView(
                     viewModel: viewModel,
+                    isSpeechRecording: speechInputService.isRecording,
                     onCollapse: { setPanelOpen(false) },
+                    onTaskCompleted: playCompletionSoundIfNeeded,
+                    onQuickAddMic: toggleSpeechInput,
+                    onQuickAddSubmit: submitQuickTask,
+                    onToggleLaunchAtLogin: toggleLaunchAtLogin,
                     onHotKeyRecordingChange: { isRecording in
                         isRecordingHotKey = isRecording
                         updateGlobalHotKeyRegistration()
@@ -131,6 +139,7 @@ struct FloatingRootView: View {
         do {
             let snapshot = try store.loadOrSeed(default: viewModel.snapshot)
             viewModel.applySnapshot(snapshot)
+            reconcileLaunchAtLoginSetting()
             if let floatingWindow {
                 updateFloatingWindowAppearance(floatingWindow)
             }
@@ -308,6 +317,51 @@ struct FloatingRootView: View {
         setPanelOpen(!isPanelOpen, activateAppWhenOpening: true)
     }
 
+    private func playCompletionSoundIfNeeded() {
+        completionSoundService.playIfEnabled(viewModel.settings.completionSound)
+    }
+
+    private func submitQuickTask() {
+        if speechInputService.isRecording {
+            speechInputService.stop()
+        }
+        viewModel.addQuickTask()
+    }
+
+    private func toggleSpeechInput() {
+        if speechInputService.isRecording {
+            let transcript = speechInputService.stop()
+            if !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                viewModel.quickAddText = transcript
+            }
+            viewModel.addQuickTask()
+            return
+        }
+
+        speechInputService.start { transcript in
+            viewModel.quickAddText = transcript
+        }
+    }
+
+    private func toggleLaunchAtLogin() {
+        let nextValue = !viewModel.settings.launchAtLogin
+
+        do {
+            let appliedValue = try launchAtLoginService.setEnabled(nextValue)
+            viewModel.setLaunchAtLogin(appliedValue)
+        } catch {
+            NSSound.beep()
+            #if DEBUG
+            print("Noto launch at login update failed: \(error)")
+            #endif
+        }
+    }
+
+    private func reconcileLaunchAtLoginSetting() {
+        let currentValue = launchAtLoginService.isEnabledForSettings
+        viewModel.setLaunchAtLogin(currentValue)
+    }
+
     private func handleHotKeyTrigger() {
         if isPanelOpen,
            !viewModel.settings.keepOnTop,
@@ -334,6 +388,8 @@ struct FloatingRootView: View {
         withoutAnimation {
             if isOpen {
                 viewModel.showList()
+            } else {
+                speechInputService.cancel()
             }
             isPanelOpen = isOpen
             updateFloatingWindowLayout(animated: false)

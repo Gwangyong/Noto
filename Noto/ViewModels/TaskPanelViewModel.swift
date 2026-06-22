@@ -94,10 +94,12 @@ final class TaskPanelViewModel: ObservableObject {
         onSnapshotChange?(snapshot)
     }
 
-    func toggleDone(_ task: SampleTask) {
-        guard let index = tasks.firstIndex(where: { $0.id == task.id }) else { return }
+    @discardableResult
+    func toggleDone(_ task: SampleTask) -> Bool {
+        guard let index = tasks.firstIndex(where: { $0.id == task.id }) else { return false }
         tasks[index].isDone.toggle()
         persistSnapshot()
+        return tasks[index].isDone
     }
 
     func beginEditing(_ task: SampleTask) {
@@ -193,8 +195,9 @@ final class TaskPanelViewModel: ObservableObject {
         }
     }
 
-    func toggleLaunchAtLogin() {
-        settings.launchAtLogin.toggle()
+    func setLaunchAtLogin(_ isEnabled: Bool) {
+        guard settings.launchAtLogin != isEnabled else { return }
+        settings.launchAtLogin = isEnabled
         persistSnapshot()
     }
 

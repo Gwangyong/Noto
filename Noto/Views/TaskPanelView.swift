@@ -13,7 +13,12 @@ private enum TaskPanelFocusField: Hashable {
 
 struct TaskPanelView: View {
     @ObservedObject var viewModel: TaskPanelViewModel
+    let isSpeechRecording: Bool
     let onCollapse: () -> Void
+    let onTaskCompleted: () -> Void
+    let onQuickAddMic: () -> Void
+    let onQuickAddSubmit: () -> Void
+    let onToggleLaunchAtLogin: () -> Void
     let onHotKeyRecordingChange: (Bool) -> Void
 
     @FocusState private var focusedField: TaskPanelFocusField?
@@ -103,7 +108,11 @@ struct TaskPanelView: View {
                                     task: task,
                                     isEditing: viewModel.editingTaskID == task.id,
                                     isDeleting: viewModel.deletingTaskID == task.id,
-                                    onToggle: { viewModel.toggleDone(task) },
+                                    onToggle: {
+                                        if viewModel.toggleDone(task) {
+                                            onTaskCompleted()
+                                        }
+                                    },
                                     onEdit: { viewModel.beginEditing(task) },
                                     onCommitEdit: { title in viewModel.commitEditing(task, title: title) },
                                     onDelete: { viewModel.deleteTask(task) },
@@ -145,8 +154,9 @@ struct TaskPanelView: View {
             QuickAddView(
                 text: $viewModel.quickAddText,
                 focusedField: $focusedField,
-                onSubmit: viewModel.addQuickTask,
-                onMic: {}
+                isRecordingSpeech: isSpeechRecording,
+                onSubmit: onQuickAddSubmit,
+                onMic: onQuickAddMic
             )
             .padding(.horizontal, DesignTokens.Spacing.lg)
             .padding(.bottom, 14)
@@ -168,7 +178,7 @@ struct TaskPanelView: View {
             settings: viewModel.settings,
             onBack: viewModel.showList,
             onCollapse: onCollapse,
-            onToggleLogin: viewModel.toggleLaunchAtLogin,
+            onToggleLogin: onToggleLaunchAtLogin,
             onToggleOnTop: viewModel.toggleKeepOnTop,
             onToggleSound: viewModel.toggleCompletionSound,
             onTheme: viewModel.setTheme,
@@ -1177,11 +1187,26 @@ private final class QuickAddTextView: NSTextView {
 private struct QuickAddView: View {
     @Binding var text: String
     let focusedField: FocusState<TaskPanelFocusField?>.Binding
+    let isRecordingSpeech: Bool
     let onSubmit: () -> Void
     let onMic: () -> Void
 
     private var hasDraftText: Bool {
         !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var buttonSystemName: String {
+        if isRecordingSpeech {
+            return "stop.fill"
+        }
+        return hasDraftText ? "arrow.up" : "mic.fill"
+    }
+
+    private var buttonAccessibilityLabel: String {
+        if isRecordingSpeech {
+            return "음성 입력 중지"
+        }
+        return hasDraftText ? "할 일 추가" : "음성 입력"
     }
 
     private func submitDraftFromButton() {
@@ -1204,9 +1229,13 @@ private struct QuickAddView: View {
             }
 
             Button {
-                hasDraftText ? submitDraftFromButton() : onMic()
+                if isRecordingSpeech {
+                    onMic()
+                } else {
+                    hasDraftText ? submitDraftFromButton() : onMic()
+                }
             } label: {
-                Image(systemName: hasDraftText ? "arrow.up" : "mic.fill")
+                Image(systemName: buttonSystemName)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(DesignTokens.Colors.onPrimary)
                     .frame(width: DesignTokens.Size.quickAddMic, height: DesignTokens.Size.quickAddMic)
@@ -1226,9 +1255,10 @@ private struct QuickAddView: View {
                     )
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(hasDraftText ? "할 일 추가" : "음성 입력")
+            .accessibilityLabel(buttonAccessibilityLabel)
         }
         .animation(.easeOut(duration: 0.12), value: hasDraftText)
+        .animation(.easeOut(duration: 0.12), value: isRecordingSpeech)
         .padding(.leading, 14)
         .padding(.trailing, 7)
         .padding(.vertical, 7)
@@ -1767,7 +1797,16 @@ private struct SupportActionRow<Trailing: View>: View {
 }
 
 #Preview {
-    TaskPanelView(viewModel: .sample(), onCollapse: {}, onHotKeyRecordingChange: { _ in })
+    TaskPanelView(
+        viewModel: .sample(),
+        isSpeechRecording: false,
+        onCollapse: {},
+        onTaskCompleted: {},
+        onQuickAddMic: {},
+        onQuickAddSubmit: {},
+        onToggleLaunchAtLogin: {},
+        onHotKeyRecordingChange: { _ in }
+    )
         .padding(40)
         .background(DesignTokens.Colors.documentBackground)
 }
