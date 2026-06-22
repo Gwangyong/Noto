@@ -1042,7 +1042,7 @@ private struct QuickAddTextEditor: NSViewRepresentable {
         let scrollView = NSScrollView()
         scrollView.drawsBackground = false
         scrollView.borderType = .noBorder
-        scrollView.hasVerticalScroller = true
+        scrollView.hasVerticalScroller = false
         scrollView.hasHorizontalScroller = false
         scrollView.autohidesScrollers = false
         scrollView.scrollerStyle = .overlay
@@ -1282,7 +1282,16 @@ private final class QuickAddTextView: NSTextView {
         }
 
         let visibleHeight = min(max(contentHeight, quickAddMinTextHeight), quickAddMaxTextHeight)
+        updateScrollIndicatorVisibility(contentHeight: contentHeight)
         onHeightChange?(visibleHeight)
+    }
+
+    private func updateScrollIndicatorVisibility(contentHeight: CGFloat) {
+        guard let scrollView = enclosingScrollView else { return }
+
+        let shouldShowScrollIndicator = contentHeight > quickAddMaxTextHeight + 0.5
+        guard scrollView.hasVerticalScroller != shouldShowScrollIndicator else { return }
+        scrollView.hasVerticalScroller = shouldShowScrollIndicator
     }
 
     private func scrollToInsertionPoint() {
