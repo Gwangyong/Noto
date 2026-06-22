@@ -19,6 +19,7 @@ final class SpeechInputService: ObservableObject {
     private var recognitionTask: SFSpeechRecognitionTask?
     private var currentTranscript = ""
     private var transcriptHandler: ((String) -> Void)?
+    private var hasInstalledInputTap = false
 
     var canStartRecording: Bool {
         speechRecognizer?.isAvailable == true
@@ -84,6 +85,7 @@ final class SpeechInputService: ObservableObject {
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { buffer, _ in
             request.append(buffer)
         }
+        hasInstalledInputTap = true
 
         audioEngine.prepare()
 
@@ -119,7 +121,10 @@ final class SpeechInputService: ObservableObject {
             audioEngine.stop()
         }
 
-        audioEngine.inputNode.removeTap(onBus: 0)
+        if hasInstalledInputTap {
+            audioEngine.inputNode.removeTap(onBus: 0)
+            hasInstalledInputTap = false
+        }
         recognitionRequest?.endAudio()
         recognitionTask?.cancel()
         recognitionRequest = nil
@@ -134,7 +139,9 @@ final class SpeechInputService: ObservableObject {
 
     deinit {
         audioEngine.stop()
-        audioEngine.inputNode.removeTap(onBus: 0)
+        if hasInstalledInputTap {
+            audioEngine.inputNode.removeTap(onBus: 0)
+        }
         recognitionRequest?.endAudio()
         recognitionTask?.cancel()
     }
