@@ -4,7 +4,7 @@
   <img src="docs/assets/noto-app-icon.png" width="104" alt="Noto app icon">
 </p>
 
-Noto는 오늘의 목표와 할 일을 바탕화면 위에 가볍게 띄워두는 macOS용 플로팅 투두 앱입니다.
+Noto는 오늘의 목표와 할 일을 바탕화면 위에 가볍게 띄워두는 macOS용 플로팅 투두 앱입니다.<br>
 작은 캐릭터를 눌러 패널을 열고 닫으며, 지금 해야 할 일을 빠르게 추가하고 체크하는 흐름에 집중합니다.
 
 ![Noto home](docs/assets/noto-screen-home.png)
@@ -56,14 +56,3 @@ Noto는 할 일, 목표, 설정 값을 기기 안에 로컬로 저장합니다.
 
 - macOS 15.0 이상
 - Xcode 16 이상 권장
-
-## 개발 빌드
-
-```sh
-xcodebuild -project Noto.xcodeproj -scheme Noto -configuration Debug build
-```
-
-## 배포
-
-현재 App Store 배포를 준비 중입니다.
-Homebrew Cask 배포는 notarized 앱 아카이브와 공개 다운로드 URL, SHA-256 체크섬이 준비되면 별도 tap 또는 cask로 추가할 수 있습니다.
