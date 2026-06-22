@@ -11,6 +11,14 @@ private enum TaskPanelFocusField: Hashable {
     case quickAdd
 }
 
+private enum NotoAppStoreLink {
+    private static let appID = "6782915254"
+
+    static let appPage = URL(string: "https://apps.apple.com/app/id\(appID)")
+    static let writeReview = URL(string: "macappstore://itunes.apple.com/app/id\(appID)?action=write-review")
+    static let webWriteReview = URL(string: "https://apps.apple.com/app/id\(appID)?action=write-review")
+}
+
 struct TaskPanelView: View {
     @ObservedObject var viewModel: TaskPanelViewModel
     let isSpeechRecording: Bool
@@ -1823,8 +1831,8 @@ private struct SettingsPanelView: View {
 
                     SupportSectionView(
                         onFeedback: openFeedbackForm,
-                        onShare: {},
-                        onRate: {}
+                        onShare: openAppStorePage,
+                        onRate: openAppStoreReview
                     )
                     .padding(.top, 17)
 
@@ -1851,6 +1859,26 @@ private struct SettingsPanelView: View {
         }
 
         NSWorkspace.shared.open(feedbackURL)
+    }
+
+    private func openAppStorePage() {
+        guard let appPageURL = NotoAppStoreLink.appPage else {
+            NSSound.beep()
+            return
+        }
+
+        NSWorkspace.shared.open(appPageURL)
+    }
+
+    private func openAppStoreReview() {
+        guard let reviewURL = NotoAppStoreLink.writeReview else {
+            NSSound.beep()
+            return
+        }
+
+        if !NSWorkspace.shared.open(reviewURL), let fallbackURL = NotoAppStoreLink.webWriteReview {
+            NSWorkspace.shared.open(fallbackURL)
+        }
     }
 }
 
