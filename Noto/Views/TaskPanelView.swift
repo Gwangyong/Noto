@@ -99,7 +99,7 @@ struct TaskPanelView: View {
                 .padding(.top, 8)
 
             ScrollViewReader { scrollProxy in
-                ScrollView(.vertical, showsIndicators: false) {
+                ScrollView(.vertical, showsIndicators: true) {
                     VStack(spacing: 3) {
                         if viewModel.tasks.isEmpty {
                             EmptyTaskListView()
