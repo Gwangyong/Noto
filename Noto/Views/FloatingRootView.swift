@@ -36,6 +36,8 @@ struct FloatingRootView: View {
                 TaskPanelView(
                     viewModel: viewModel,
                     isSpeechRecording: speechInputService.isRecording,
+                    speechTranscript: speechInputService.transcript,
+                    speechErrorMessage: speechInputService.errorMessage,
                     onCollapse: { setPanelOpen(false) },
                     onTaskCompleted: playCompletionSoundIfNeeded,
                     onQuickAddMic: toggleSpeechInput,
@@ -118,6 +120,11 @@ struct FloatingRootView: View {
             if let floatingWindow {
                 updateFloatingWindowAppearance(floatingWindow)
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in
+            guard speechInputService.isRecording,
+                  !speechInputService.isRequestingPermission else { return }
+            stopSpeechInputPreservingText()
         }
         .onChange(of: viewModel.settings.hotKey) { _, _ in
             updateGlobalHotKeyRegistration()
@@ -323,24 +330,29 @@ struct FloatingRootView: View {
 
     private func submitQuickTask() {
         if speechInputService.isRecording {
-            speechInputService.stop()
+            stopSpeechInputPreservingText()
+            return
         }
         viewModel.addQuickTask()
     }
 
     private func toggleSpeechInput() {
         if speechInputService.isRecording {
-            let transcript = speechInputService.stop()
-            if !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                viewModel.quickAddText = transcript
-            }
-            viewModel.addQuickTask()
+            stopSpeechInputPreservingText()
             return
         }
 
-        speechInputService.start { transcript in
-            viewModel.quickAddText = transcript
-        }
+        speechInputService.start()
+    }
+
+    private func stopSpeechInputPreservingText() {
+        let transcript = speechInputService.stop()
+        let currentText = viewModel.quickAddText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard currentText.isEmpty else { return }
+
+        let recognizedText = transcript.displayText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !recognizedText.isEmpty else { return }
+        viewModel.quickAddText = recognizedText
     }
 
     private func toggleLaunchAtLogin() {
@@ -389,7 +401,11 @@ struct FloatingRootView: View {
             if isOpen {
                 viewModel.showList()
             } else {
-                speechInputService.cancel()
+                if speechInputService.isRecording {
+                    stopSpeechInputPreservingText()
+                } else {
+                    speechInputService.cancel()
+                }
             }
             isPanelOpen = isOpen
             updateFloatingWindowLayout(animated: false)

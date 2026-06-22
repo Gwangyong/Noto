@@ -14,6 +14,8 @@ private enum TaskPanelFocusField: Hashable {
 struct TaskPanelView: View {
     @ObservedObject var viewModel: TaskPanelViewModel
     let isSpeechRecording: Bool
+    let speechTranscript: SpeechTranscript
+    let speechErrorMessage: String?
     let onCollapse: () -> Void
     let onTaskCompleted: () -> Void
     let onQuickAddMic: () -> Void
@@ -155,6 +157,8 @@ struct TaskPanelView: View {
                 text: $viewModel.quickAddText,
                 focusedField: $focusedField,
                 isRecordingSpeech: isSpeechRecording,
+                speechTranscript: speechTranscript,
+                speechErrorMessage: speechErrorMessage,
                 onSubmit: onQuickAddSubmit,
                 onMic: onQuickAddMic
             )
@@ -1020,15 +1024,33 @@ private struct EmptyTaskListView: View {
     }
 }
 
+private let quickAddMinTextHeight: CGFloat = 18
+private let quickAddMaxTextHeight: CGFloat = 38
+
 private struct QuickAddTextEditor: NSViewRepresentable {
     @Binding var text: String
+    @Binding var measuredHeight: CGFloat
+    @Binding var selectedRange: NSRange
+    @Binding var requestedSelectedRange: NSRange?
     let focusedField: FocusState<TaskPanelFocusField?>.Binding
+    let placeholder: String
     let onSubmit: () -> Void
+    let onUserEdit: () -> Void
+    let onSelectionChange: (NSRange) -> Void
 
-    func makeNSView(context: Context) -> QuickAddTextView {
+    func makeNSView(context: Context) -> NSScrollView {
+        let scrollView = NSScrollView()
+        scrollView.drawsBackground = false
+        scrollView.borderType = .noBorder
+        scrollView.hasVerticalScroller = true
+        scrollView.hasHorizontalScroller = false
+        scrollView.autohidesScrollers = false
+        scrollView.scrollerStyle = .overlay
+        scrollView.verticalScroller?.controlSize = .mini
+
         let textView = QuickAddTextView()
         textView.delegate = context.coordinator
-        textView.placeholder = "다음 할 일은?"
+        textView.placeholder = placeholder
         textView.placeholderColor = DesignTokens.AppKitColors.placeholder
         textView.font = NSFont(name: "IBM Plex Sans KR", size: 12.5)
             ?? .systemFont(ofSize: 12.5, weight: .regular)
@@ -1044,27 +1066,50 @@ private struct QuickAddTextEditor: NSViewRepresentable {
         textView.isAutomaticTextReplacementEnabled = false
         textView.textContainerInset = NSSize(width: 0, height: 1.5)
         textView.textContainer?.lineFragmentPadding = 0
-        textView.textContainer?.maximumNumberOfLines = 1
-        textView.textContainer?.lineBreakMode = .byClipping
+        textView.textContainer?.maximumNumberOfLines = 0
+        textView.textContainer?.lineBreakMode = .byCharWrapping
         textView.textContainer?.widthTracksTextView = true
+        textView.isHorizontallyResizable = false
+        textView.isVerticallyResizable = true
+        textView.minSize = NSSize(width: 0, height: quickAddMinTextHeight)
+        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        textView.autoresizingMask = [.width]
         textView.onTextChange = { value in
             context.coordinator.updateText(value)
         }
         textView.onSubmit = { value in
             context.coordinator.submit(value)
         }
+        textView.onHeightChange = { height in
+            context.coordinator.updateMeasuredHeight(height)
+        }
+        textView.onSelectionChange = { range in
+            context.coordinator.updateSelectedRange(range)
+        }
         textView.setExternalText(text)
-        return textView
+
+        scrollView.documentView = textView
+        context.coordinator.textView = textView
+        return scrollView
     }
 
-    func updateNSView(_ nsView: QuickAddTextView, context: Context) {
+    func updateNSView(_ scrollView: NSScrollView, context: Context) {
         context.coordinator.parent = self
-        if nsView.string != text {
-            nsView.setExternalText(text)
+        guard let textView = scrollView.documentView as? QuickAddTextView else { return }
+
+        textView.placeholder = placeholder
+        textView.updateContainerWidth(scrollView.contentSize.width)
+        if textView.string != text {
+            textView.setExternalText(text)
+        }
+        if let requestedSelectedRange {
+            textView.applySelectedRange(requestedSelectedRange)
+            context.coordinator.clearRequestedSelectedRange()
         }
         if focusedField.wrappedValue == .quickAdd {
-            nsView.focusIfPossible()
+            textView.focusIfPossible()
         }
+        textView.updateMeasuredHeight()
     }
 
     func makeCoordinator() -> Coordinator {
@@ -1073,6 +1118,7 @@ private struct QuickAddTextEditor: NSViewRepresentable {
 
     final class Coordinator: NSObject, NSTextViewDelegate {
         var parent: QuickAddTextEditor
+        weak var textView: QuickAddTextView?
 
         init(parent: QuickAddTextEditor) {
             self.parent = parent
@@ -1082,12 +1128,33 @@ private struct QuickAddTextEditor: NSViewRepresentable {
             let singleLineText = value.replacingOccurrences(of: "\n", with: " ")
             guard parent.text != singleLineText else { return }
             parent.text = singleLineText
+            parent.onUserEdit()
         }
 
         func submit(_ value: String) {
             updateText(value)
             parent.onSubmit()
             parent.focusedField.wrappedValue = .quickAdd
+        }
+
+        func updateMeasuredHeight(_ height: CGFloat) {
+            DispatchQueue.main.async {
+                guard abs(self.parent.measuredHeight - height) > 0.5 else { return }
+                self.parent.measuredHeight = height
+            }
+        }
+
+        func updateSelectedRange(_ range: NSRange) {
+            DispatchQueue.main.async {
+                self.parent.selectedRange = range
+                self.parent.onSelectionChange(range)
+            }
+        }
+
+        func clearRequestedSelectedRange() {
+            DispatchQueue.main.async {
+                self.parent.requestedSelectedRange = nil
+            }
         }
 
         func textDidBeginEditing(_ notification: Notification) {
@@ -1102,6 +1169,12 @@ private struct QuickAddTextEditor: NSViewRepresentable {
         func textDidChange(_ notification: Notification) {
             guard let textView = notification.object as? QuickAddTextView else { return }
             textView.notifyTextChanged()
+        }
+
+        func textViewDidChangeSelection(_ notification: Notification) {
+            guard let textView = notification.object as? QuickAddTextView else { return }
+            guard !textView.isApplyingExternalText else { return }
+            updateSelectedRange(textView.selectedRange())
         }
 
         func textView(_ textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
@@ -1122,7 +1195,9 @@ private final class QuickAddTextView: NSTextView {
     var placeholderColor = NSColor.secondaryLabelColor
     var onTextChange: ((String) -> Void)?
     var onSubmit: ((String) -> Void)?
-    private var isApplyingExternalText = false
+    var onHeightChange: ((CGFloat) -> Void)?
+    var onSelectionChange: ((NSRange) -> Void)?
+    private(set) var isApplyingExternalText = false
 
     override var acceptsFirstResponder: Bool {
         true
@@ -1154,8 +1229,19 @@ private final class QuickAddTextView: NSTextView {
     func setExternalText(_ value: String) {
         isApplyingExternalText = true
         string = value
+        applySelectedRange(selectedRange(), notifyChange: false)
         isApplyingExternalText = false
         needsDisplay = true
+        updateMeasuredHeight()
+        scrollToInsertionPoint()
+    }
+
+    func applySelectedRange(_ range: NSRange, notifyChange: Bool = true) {
+        setSelectedRange(clampedRange(range))
+        scrollToInsertionPoint()
+        if notifyChange {
+            onSelectionChange?(selectedRange())
+        }
     }
 
     func focusIfPossible() {
@@ -1170,6 +1256,46 @@ private final class QuickAddTextView: NSTextView {
         guard !isApplyingExternalText else { return }
         onTextChange?(string)
         needsDisplay = true
+        updateMeasuredHeight()
+        scrollToInsertionPoint()
+    }
+
+    func updateContainerWidth(_ width: CGFloat) {
+        let resolvedWidth = max(width, 1)
+        if abs(frame.width - resolvedWidth) > 0.5 {
+            setFrameSize(NSSize(width: resolvedWidth, height: max(frame.height, quickAddMinTextHeight)))
+        }
+        textContainer?.containerSize = NSSize(width: resolvedWidth, height: .greatestFiniteMagnitude)
+    }
+
+    func updateMeasuredHeight() {
+        let availableWidth = max(bounds.width, enclosingScrollView?.contentSize.width ?? 0)
+        guard availableWidth > 0, let textContainer, let layoutManager else { return }
+
+        textContainer.containerSize = NSSize(width: availableWidth, height: .greatestFiniteMagnitude)
+        layoutManager.ensureLayout(for: textContainer)
+
+        let usedRect = layoutManager.usedRect(for: textContainer)
+        let contentHeight = max(quickAddMinTextHeight, ceil(usedRect.height + textContainerInset.height * 2))
+        if abs(frame.height - contentHeight) > 0.5 {
+            setFrameSize(NSSize(width: availableWidth, height: contentHeight))
+        }
+
+        let visibleHeight = min(max(contentHeight, quickAddMinTextHeight), quickAddMaxTextHeight)
+        onHeightChange?(visibleHeight)
+    }
+
+    private func scrollToInsertionPoint() {
+        guard enclosingScrollView != nil else { return }
+        let caretLocation = min(selectedRange().location, string.utf16.count)
+        scrollRangeToVisible(NSRange(location: caretLocation, length: 0))
+    }
+
+    private func clampedRange(_ range: NSRange) -> NSRange {
+        let textLength = string.utf16.count
+        let location = min(max(0, range.location), textLength)
+        let maxLength = max(0, textLength - location)
+        return NSRange(location: location, length: min(max(0, range.length), maxLength))
     }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -1188,17 +1314,23 @@ private struct QuickAddView: View {
     @Binding var text: String
     let focusedField: FocusState<TaskPanelFocusField?>.Binding
     let isRecordingSpeech: Bool
+    let speechTranscript: SpeechTranscript
+    let speechErrorMessage: String?
     let onSubmit: () -> Void
     let onMic: () -> Void
+
+    @State private var inputHeight = quickAddMinTextHeight
+    @State private var selectedRange = NSRange(location: 0, length: 0)
+    @State private var requestedSelectedRange: NSRange?
+    @State private var activeSpeechTextRange: NSRange?
+    @State private var speechSegmentBaseTranscript = ""
+    @State private var lastProcessedSpeechText = ""
 
     private var hasDraftText: Bool {
         !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private var buttonSystemName: String {
-        if isRecordingSpeech {
-            return "stop.fill"
-        }
         return hasDraftText ? "arrow.up" : "mic.fill"
     }
 
@@ -1214,29 +1346,139 @@ private struct QuickAddView: View {
         focusedField.wrappedValue = .quickAdd
     }
 
-    var body: some View {
-        HStack(spacing: 8) {
-            QuickAddTextEditor(
-                text: $text,
-                focusedField: focusedField,
-                onSubmit: onSubmit
-            )
-            .frame(height: 18, alignment: .center)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
-            .onTapGesture {
-                focusedField.wrappedValue = .quickAdd
-            }
+    private func applySpeechTranscript(_ recognizedText: String) {
+        guard isRecordingSpeech else { return }
 
-            Button {
-                if isRecordingSpeech {
-                    onMic()
-                } else {
-                    hasDraftText ? submitDraftFromButton() : onMic()
+        let nextText = recognizedText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !nextText.isEmpty else { return }
+
+        defer {
+            lastProcessedSpeechText = nextText
+        }
+
+        let spokenSegment = speechSegment(from: speechSegmentBaseTranscript, to: nextText)
+        guard !spokenSegment.isEmpty else { return }
+
+        let targetRange = activeSpeechTextRange ?? selectedRange
+        let replacement = replacingText(in: text, range: targetRange, with: spokenSegment)
+        text = replacement.text
+        activeSpeechTextRange = replacement.range
+
+        let nextSelection = NSRange(location: replacement.range.location + replacement.range.length, length: 0)
+        selectedRange = nextSelection
+        requestedSelectedRange = nextSelection
+    }
+
+    private func handleUserEdit() {
+        guard isRecordingSpeech else { return }
+        beginNewSpeechInsertionSegment()
+    }
+
+    private func handleSelectionChange(_ range: NSRange) {
+        selectedRange = range
+        guard isRecordingSpeech else { return }
+
+        if let activeSpeechTextRange,
+           range.length == 0,
+           range.location == activeSpeechTextRange.location + activeSpeechTextRange.length {
+            return
+        }
+
+        if let requestedSelectedRange, NSEqualRanges(range, requestedSelectedRange) {
+            return
+        }
+
+        beginNewSpeechInsertionSegment()
+    }
+
+    private func beginNewSpeechInsertionSegment() {
+        activeSpeechTextRange = nil
+        speechSegmentBaseTranscript = lastProcessedSpeechText
+    }
+
+    private func resetSpeechInsertionState() {
+        activeSpeechTextRange = nil
+        speechSegmentBaseTranscript = speechTranscript.displayText.trimmingCharacters(in: .whitespacesAndNewlines)
+        lastProcessedSpeechText = speechSegmentBaseTranscript
+    }
+
+    private func speechSegment(from baseText: String, to updatedText: String) -> String {
+        let baseText = baseText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let updatedText = updatedText.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !updatedText.isEmpty, updatedText != baseText else { return "" }
+        guard !baseText.isEmpty else { return updatedText }
+
+        if updatedText.hasPrefix(baseText) {
+            return String(updatedText.dropFirst(baseText.count))
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        let commonPrefix = updatedText.commonPrefix(with: baseText)
+        return String(updatedText.dropFirst(commonPrefix.count))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func replacingText(in source: String, range: NSRange, with replacement: String) -> (text: String, range: NSRange) {
+        let clampedRange = clampedRange(range, in: source)
+        guard let swiftRange = Range(clampedRange, in: source) else {
+            let fallbackLocation = source.utf16.count
+            return (
+                source + replacement,
+                NSRange(location: fallbackLocation, length: replacement.utf16.count)
+            )
+        }
+
+        let updatedText = source.replacingCharacters(in: swiftRange, with: replacement)
+        return (
+            updatedText,
+            NSRange(location: clampedRange.location, length: replacement.utf16.count)
+        )
+    }
+
+    private func clampedRange(_ range: NSRange, in value: String) -> NSRange {
+        let textLength = value.utf16.count
+        let location = min(max(0, range.location), textLength)
+        let maxLength = max(0, textLength - location)
+        return NSRange(location: location, length: min(max(0, range.length), maxLength))
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 8) {
+                QuickAddTextEditor(
+                    text: $text,
+                    measuredHeight: $inputHeight,
+                    selectedRange: $selectedRange,
+                    requestedSelectedRange: $requestedSelectedRange,
+                    focusedField: focusedField,
+                    placeholder: isRecordingSpeech ? "말씀해보세요..." : "다음 할 일은?",
+                    onSubmit: onSubmit,
+                    onUserEdit: handleUserEdit,
+                    onSelectionChange: handleSelectionChange
+                )
+                .frame(height: inputHeight, alignment: .center)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    focusedField.wrappedValue = .quickAdd
                 }
-            } label: {
-                Image(systemName: buttonSystemName)
-                    .font(.system(size: 13, weight: .semibold))
+
+                Button {
+                    if isRecordingSpeech {
+                        onMic()
+                    } else {
+                        hasDraftText ? submitDraftFromButton() : onMic()
+                    }
+                } label: {
+                    Group {
+                        if isRecordingSpeech {
+                            RecordingWaveformIcon()
+                        } else {
+                            Image(systemName: buttonSystemName)
+                                .font(.system(size: 13, weight: .semibold))
+                        }
+                    }
                     .foregroundStyle(DesignTokens.Colors.onPrimary)
                     .frame(width: DesignTokens.Size.quickAddMic, height: DesignTokens.Size.quickAddMic)
                     .background(
@@ -1253,23 +1495,76 @@ private struct QuickAddView: View {
                             )
                             .shadow(color: DesignTokens.Colors.primaryGradientEnd.opacity(0.35), radius: 6, x: 0, y: 2)
                     )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(buttonAccessibilityLabel)
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(buttonAccessibilityLabel)
+            .padding(.leading, 14)
+            .padding(.trailing, 7)
+            .padding(.vertical, 7)
+            .background(
+                RoundedRectangle(cornerRadius: DesignTokens.Radius.input, style: .continuous)
+                    .fill(DesignTokens.Colors.controlSurface)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: DesignTokens.Radius.input, style: .continuous)
+                            .stroke(DesignTokens.Colors.hairline.opacity(0.55), lineWidth: 0.5)
+                    )
+            )
+
+            if let speechErrorMessage, !speechErrorMessage.isEmpty {
+                Text(speechErrorMessage)
+                    .font(DesignTokens.Typography.sans(size: 10.5, weight: .regular))
+                    .foregroundStyle(DesignTokens.Colors.destructive)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 2)
+            }
         }
         .animation(.easeOut(duration: 0.12), value: hasDraftText)
         .animation(.easeOut(duration: 0.12), value: isRecordingSpeech)
-        .padding(.leading, 14)
-        .padding(.trailing, 7)
-        .padding(.vertical, 7)
-        .background(
-            RoundedRectangle(cornerRadius: DesignTokens.Radius.input, style: .continuous)
-                .fill(DesignTokens.Colors.controlSurface)
-                .overlay(
-                    RoundedRectangle(cornerRadius: DesignTokens.Radius.input, style: .continuous)
-                        .stroke(DesignTokens.Colors.hairline.opacity(0.55), lineWidth: 0.5)
-                )
-        )
+        .animation(.easeOut(duration: 0.12), value: inputHeight)
+        .onChange(of: speechTranscript.displayText) { _, recognizedText in
+            applySpeechTranscript(recognizedText)
+        }
+        .onChange(of: isRecordingSpeech) { wasRecording, isRecording in
+            if isRecording {
+                resetSpeechInsertionState()
+                focusedField.wrappedValue = nil
+                applySpeechTranscript(speechTranscript.displayText)
+            } else if wasRecording {
+                resetSpeechInsertionState()
+                DispatchQueue.main.async {
+                    guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                          NSApp.isActive else { return }
+                    focusedField.wrappedValue = .quickAdd
+                }
+            }
+        }
+    }
+}
+
+private struct RecordingWaveformIcon: View {
+    @State private var isAnimating = false
+
+    private let heights: [CGFloat] = [8, 14, 10, 16]
+
+    var body: some View {
+        HStack(spacing: 2.5) {
+            ForEach(heights.indices, id: \.self) { index in
+                Capsule(style: .continuous)
+                    .frame(width: 2.4, height: isAnimating ? heights[index] : 6)
+                    .animation(
+                        .easeInOut(duration: 0.5)
+                            .repeatForever(autoreverses: true)
+                            .delay(Double(index) * 0.08),
+                        value: isAnimating
+                    )
+            }
+        }
+        .frame(width: DesignTokens.Size.quickAddMic, height: DesignTokens.Size.quickAddMic)
+        .onAppear {
+            isAnimating = true
+        }
     }
 }
 
@@ -1800,6 +2095,8 @@ private struct SupportActionRow<Trailing: View>: View {
     TaskPanelView(
         viewModel: .sample(),
         isSpeechRecording: false,
+        speechTranscript: .empty,
+        speechErrorMessage: nil,
         onCollapse: {},
         onTaskCompleted: {},
         onQuickAddMic: {},
