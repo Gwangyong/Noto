@@ -719,7 +719,7 @@ private struct InlineTaskTitleEditor: NSViewRepresentable {
             textView.isSelectable = true
             textView.startOutsideClickMonitoring()
             textView.focusForEditingIfNeeded()
-            textView.updateMeasuredHeight()
+            textView.scheduleMeasuredHeightUpdate()
         }
 
         func commitEditing(_ title: String) {
@@ -737,7 +737,7 @@ private struct InlineTaskTitleEditor: NSViewRepresentable {
         func textDidChange(_ notification: Notification) {
             guard let textView = notification.object as? NSTextView else { return }
             (textView as? TaskTitleTextView)?.hasUserEditedText = true
-            (textView as? TaskTitleTextView)?.updateMeasuredHeight()
+            (textView as? TaskTitleTextView)?.scheduleMeasuredHeightUpdate()
         }
 
         func textView(_ textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
@@ -763,6 +763,8 @@ private final class TaskTitleTextView: NSTextView {
     var hasUserEditedText = false
     private var outsideClickMonitor: Any?
     private var didRequestInitialFocus = false
+    private var isHeightUpdateScheduled = false
+    private var isMeasuringHeight = false
     private var currentMeasuredHeight: CGFloat = 18
     private var taskTitleAttributes: [NSAttributedString.Key: Any] = [:]
 
@@ -776,13 +778,13 @@ private final class TaskTitleTextView: NSTextView {
 
     override func setFrameSize(_ newSize: NSSize) {
         super.setFrameSize(newSize)
-        updateMeasuredHeight()
+        scheduleMeasuredHeightUpdate()
     }
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         focusForEditingIfNeeded()
-        updateMeasuredHeight()
+        scheduleMeasuredHeightUpdate()
     }
 
     override func keyDown(with event: NSEvent) {
@@ -832,8 +834,24 @@ private final class TaskTitleTextView: NSTextView {
         }
     }
 
-    func updateMeasuredHeight() {
+    func scheduleMeasuredHeightUpdate() {
+        guard !isHeightUpdateScheduled else { return }
+        isHeightUpdateScheduled = true
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.isHeightUpdateScheduled = false
+            self.updateMeasuredHeight()
+        }
+    }
+
+    private func updateMeasuredHeight() {
+        guard !isMeasuringHeight else { return }
         guard bounds.width > 0, let textContainer, let layoutManager else { return }
+
+        isMeasuringHeight = true
+        defer { isMeasuringHeight = false }
+
         textContainer.containerSize = NSSize(width: bounds.width, height: .greatestFiniteMagnitude)
         layoutManager.ensureLayout(for: textContainer)
 
@@ -1159,7 +1177,7 @@ private struct QuickAddTextEditor: NSViewRepresentable {
         if focusedField.wrappedValue == .quickAdd {
             textView.focusIfPossible()
         }
-        textView.updateMeasuredHeight()
+        textView.scheduleMeasuredHeightUpdate()
     }
 
     func makeCoordinator() -> Coordinator {
@@ -1248,6 +1266,8 @@ private final class QuickAddTextView: NSTextView {
     var onHeightChange: ((CGFloat) -> Void)?
     var onSelectionChange: ((NSRange) -> Void)?
     private(set) var isApplyingExternalText = false
+    private var isHeightUpdateScheduled = false
+    private var isMeasuringHeight = false
 
     override var acceptsFirstResponder: Bool {
         true
@@ -1282,7 +1302,7 @@ private final class QuickAddTextView: NSTextView {
         applySelectedRange(selectedRange(), notifyChange: false)
         isApplyingExternalText = false
         needsDisplay = true
-        updateMeasuredHeight()
+        scheduleMeasuredHeightUpdate()
         scrollToInsertionPoint()
     }
 
@@ -1306,7 +1326,7 @@ private final class QuickAddTextView: NSTextView {
         guard !isApplyingExternalText else { return }
         onTextChange?(string)
         needsDisplay = true
-        updateMeasuredHeight()
+        scheduleMeasuredHeightUpdate()
         scrollToInsertionPoint()
     }
 
@@ -1316,11 +1336,27 @@ private final class QuickAddTextView: NSTextView {
             setFrameSize(NSSize(width: resolvedWidth, height: max(frame.height, quickAddMinTextHeight)))
         }
         textContainer?.containerSize = NSSize(width: resolvedWidth, height: .greatestFiniteMagnitude)
+        scheduleMeasuredHeightUpdate()
     }
 
-    func updateMeasuredHeight() {
+    func scheduleMeasuredHeightUpdate() {
+        guard !isHeightUpdateScheduled else { return }
+        isHeightUpdateScheduled = true
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.isHeightUpdateScheduled = false
+            self.updateMeasuredHeight()
+        }
+    }
+
+    private func updateMeasuredHeight() {
+        guard !isMeasuringHeight else { return }
         let availableWidth = max(bounds.width, enclosingScrollView?.contentSize.width ?? 0)
         guard availableWidth > 0, let textContainer, let layoutManager else { return }
+
+        isMeasuringHeight = true
+        defer { isMeasuringHeight = false }
 
         textContainer.containerSize = NSSize(width: availableWidth, height: .greatestFiniteMagnitude)
         layoutManager.ensureLayout(for: textContainer)
