@@ -155,8 +155,10 @@ struct TaskPanelView: View {
                     .padding(.top, 12)
                     .padding(.bottom, 12)
                     .background(
-                        TaskListDragAutoScroller(isActive: draggingTaskID != nil)
-                            .allowsHitTesting(false)
+                        TaskListDragAutoScroller(isActive: draggingTaskID != nil) {
+                            draggingTaskID = nil
+                        }
+                        .allowsHitTesting(false)
                     )
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -1070,6 +1072,7 @@ private struct TaskRowDropDelegate: DropDelegate {
 
 private struct TaskListDragAutoScroller: NSViewRepresentable {
     let isActive: Bool
+    let onPointerReleased: () -> Void
 
     func makeNSView(context: Context) -> AutoScrollHostView {
         let view = AutoScrollHostView()
@@ -1080,6 +1083,7 @@ private struct TaskListDragAutoScroller: NSViewRepresentable {
 
     func updateNSView(_ nsView: AutoScrollHostView, context: Context) {
         context.coordinator.hostView = nsView
+        context.coordinator.onPointerReleased = onPointerReleased
         context.coordinator.setActive(isActive)
     }
 
@@ -1104,7 +1108,9 @@ private struct TaskListDragAutoScroller: NSViewRepresentable {
     final class Coordinator {
         weak var hostView: NSView?
         weak var scrollView: NSScrollView?
+        var onPointerReleased: () -> Void = {}
         private var timer: Timer?
+        private var didNotifyPointerReleased = false
 
         private let edgeThreshold: CGFloat = 38
         private let horizontalTrackingInset: CGFloat = 52
@@ -1125,6 +1131,7 @@ private struct TaskListDragAutoScroller: NSViewRepresentable {
 
         private func startAutoScroll() {
             guard timer == nil else { return }
+            didNotifyPointerReleased = false
             refreshScrollView()
 
             let timer = Timer(timeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
@@ -1140,6 +1147,11 @@ private struct TaskListDragAutoScroller: NSViewRepresentable {
         }
 
         private func scrollIfNeeded() {
+            guard isLeftMousePressed else {
+                notifyPointerReleased()
+                return
+            }
+
             guard let scrollView = scrollView ?? hostView?.enclosingScrollView,
                   let documentView = scrollView.documentView,
                   let window = scrollView.window
@@ -1174,6 +1186,20 @@ private struct TaskListDragAutoScroller: NSViewRepresentable {
 
             contentView.scroll(to: NSPoint(x: visibleRect.origin.x, y: nextY))
             scrollView.reflectScrolledClipView(contentView)
+        }
+
+        private var isLeftMousePressed: Bool {
+            (NSEvent.pressedMouseButtons & (1 << 0)) != 0
+        }
+
+        private func notifyPointerReleased() {
+            guard !didNotifyPointerReleased else { return }
+            didNotifyPointerReleased = true
+            stopAutoScroll()
+
+            DispatchQueue.main.async { [onPointerReleased] in
+                onPointerReleased()
+            }
         }
 
         private func scrollStep(for distance: CGFloat) -> CGFloat {
