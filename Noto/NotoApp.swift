@@ -99,7 +99,7 @@ private struct SwiftDataContainerFailureView: View {
                     .font(DesignTokens.Typography.modalTitle)
                     .foregroundStyle(DesignTokens.Colors.textPrimary)
 
-                Text("로컬 데이터를 여는 중 문제가 발생했어요. 잠시 후 다시 시도해주세요.")
+                Text("로컬 데이터를 여는 중 문제가 발생했어요.\n잠시 후 다시 시도해주세요.")
                     .font(DesignTokens.Typography.modalBody)
                     .foregroundStyle(DesignTokens.Colors.textSecondary)
                     .multilineTextAlignment(.center)
