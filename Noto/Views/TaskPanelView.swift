@@ -19,6 +19,13 @@ private enum NotoAppStoreLink {
     static let webWriteReview = URL(string: "https://apps.apple.com/app/id\(appID)?action=write-review")
 }
 
+private let taskRowReorderType = UTType(exportedAs: "com.gwangyong.noto.task-row-reorder")
+private let taskRowReorderPasteboardType = NSPasteboard.PasteboardType(taskRowReorderType.identifier)
+
+private func isTaskRowReorderDrag(_ sender: NSDraggingInfo) -> Bool {
+    sender.draggingPasteboard.availableType(from: [taskRowReorderPasteboardType]) != nil
+}
+
 struct TaskPanelView: View {
     @ObservedObject var viewModel: TaskPanelViewModel
     let isSpeechRecording: Bool
@@ -147,6 +154,12 @@ struct TaskPanelView: View {
                     .padding(.horizontal, 10)
                     .padding(.top, 12)
                     .padding(.bottom, 12)
+                    .background(
+                        TaskListDragAutoScroller(isActive: draggingTaskID != nil) {
+                            draggingTaskID = nil
+                        }
+                        .allowsHitTesting(false)
+                    )
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .onChange(of: viewModel.tasks.count) { oldCount, newCount in
@@ -936,7 +949,15 @@ private struct TaskRowView: View {
                         .contentShape(Rectangle())
                         .onDrag {
                             onDragStart()
-                            return NSItemProvider(object: task.id.uuidString as NSString)
+                            let provider = NSItemProvider(object: task.id.uuidString as NSString)
+                            provider.registerDataRepresentation(
+                                forTypeIdentifier: taskRowReorderType.identifier,
+                                visibility: .all
+                            ) { completion in
+                                completion(Data(task.id.uuidString.utf8), nil)
+                                return nil
+                            }
+                            return provider
                         } preview: {
                             Color.clear
                                 .frame(width: 1, height: 1)
@@ -1046,6 +1067,145 @@ private struct TaskRowDropDelegate: DropDelegate {
     func performDrop(info: DropInfo) -> Bool {
         draggingTaskID = nil
         return true
+    }
+}
+
+private struct TaskListDragAutoScroller: NSViewRepresentable {
+    let isActive: Bool
+    let onPointerReleased: () -> Void
+
+    func makeNSView(context: Context) -> AutoScrollHostView {
+        let view = AutoScrollHostView()
+        view.coordinator = context.coordinator
+        context.coordinator.hostView = view
+        return view
+    }
+
+    func updateNSView(_ nsView: AutoScrollHostView, context: Context) {
+        context.coordinator.hostView = nsView
+        context.coordinator.onPointerReleased = onPointerReleased
+        context.coordinator.setActive(isActive)
+    }
+
+    static func dismantleNSView(_ nsView: AutoScrollHostView, coordinator: Coordinator) {
+        coordinator.setActive(false)
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    final class AutoScrollHostView: NSView {
+        weak var coordinator: Coordinator?
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            coordinator?.hostView = self
+            coordinator?.refreshScrollView()
+        }
+    }
+
+    final class Coordinator {
+        weak var hostView: NSView?
+        weak var scrollView: NSScrollView?
+        var onPointerReleased: () -> Void = {}
+        private var timer: Timer?
+        private var didNotifyPointerReleased = false
+
+        private let edgeThreshold: CGFloat = 38
+        private let horizontalTrackingInset: CGFloat = 52
+        private let minimumStep: CGFloat = 3
+        private let maximumStep: CGFloat = 14
+
+        func setActive(_ isActive: Bool) {
+            if isActive {
+                startAutoScroll()
+            } else {
+                stopAutoScroll()
+            }
+        }
+
+        func refreshScrollView() {
+            scrollView = hostView?.enclosingScrollView
+        }
+
+        private func startAutoScroll() {
+            guard timer == nil else { return }
+            didNotifyPointerReleased = false
+            refreshScrollView()
+
+            let timer = Timer(timeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
+                self?.scrollIfNeeded()
+            }
+            self.timer = timer
+            RunLoop.main.add(timer, forMode: .common)
+        }
+
+        private func stopAutoScroll() {
+            timer?.invalidate()
+            timer = nil
+        }
+
+        private func scrollIfNeeded() {
+            guard isLeftMousePressed else {
+                notifyPointerReleased()
+                return
+            }
+
+            guard let scrollView = scrollView ?? hostView?.enclosingScrollView,
+                  let documentView = scrollView.documentView,
+                  let window = scrollView.window
+            else { return }
+
+            self.scrollView = scrollView
+
+            let windowPoint = window.convertPoint(fromScreen: NSEvent.mouseLocation)
+            let point = scrollView.convert(windowPoint, from: nil)
+            let bounds = scrollView.bounds
+            let horizontalTrackingRange = (bounds.minX - horizontalTrackingInset)...(bounds.maxX + horizontalTrackingInset)
+            guard horizontalTrackingRange.contains(point.x) else { return }
+
+            let topDistance = scrollView.isFlipped ? point.y - bounds.minY : bounds.maxY - point.y
+            let bottomDistance = scrollView.isFlipped ? bounds.maxY - point.y : point.y - bounds.minY
+            let direction: CGFloat
+
+            if topDistance < edgeThreshold {
+                direction = -scrollStep(for: topDistance)
+            } else if bottomDistance < edgeThreshold {
+                direction = scrollStep(for: bottomDistance)
+            } else {
+                return
+            }
+
+            let contentView = scrollView.contentView
+            let visibleRect = contentView.bounds
+            let maxY = max(0, documentView.bounds.height - visibleRect.height)
+            let documentStep = documentView.isFlipped ? direction : -direction
+            let nextY = min(max(visibleRect.origin.y + documentStep, 0), maxY)
+            guard abs(nextY - visibleRect.origin.y) > 0.5 else { return }
+
+            contentView.scroll(to: NSPoint(x: visibleRect.origin.x, y: nextY))
+            scrollView.reflectScrolledClipView(contentView)
+        }
+
+        private var isLeftMousePressed: Bool {
+            (NSEvent.pressedMouseButtons & (1 << 0)) != 0
+        }
+
+        private func notifyPointerReleased() {
+            guard !didNotifyPointerReleased else { return }
+            didNotifyPointerReleased = true
+            stopAutoScroll()
+
+            DispatchQueue.main.async { [onPointerReleased] in
+                onPointerReleased()
+            }
+        }
+
+        private func scrollStep(for distance: CGFloat) -> CGFloat {
+            let progress = max(0, min(1, (edgeThreshold - distance) / edgeThreshold))
+            return minimumStep + progress * (maximumStep - minimumStep)
+        }
     }
 }
 
@@ -1287,6 +1447,26 @@ private final class QuickAddTextView: NSTextView {
             return
         }
         super.keyDown(with: event)
+    }
+
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        guard !isTaskRowReorderDrag(sender) else { return [] }
+        return super.draggingEntered(sender)
+    }
+
+    override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
+        guard !isTaskRowReorderDrag(sender) else { return [] }
+        return super.draggingUpdated(sender)
+    }
+
+    override func prepareForDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        guard !isTaskRowReorderDrag(sender) else { return false }
+        return super.prepareForDragOperation(sender)
+    }
+
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        guard !isTaskRowReorderDrag(sender) else { return false }
+        return super.performDragOperation(sender)
     }
 
     override func insertText(_ insertString: Any, replacementRange: NSRange) {
