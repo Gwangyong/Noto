@@ -9,7 +9,7 @@ import SwiftUI
 
 struct FloatingRootView: View {
     @Environment(\.modelContext) private var modelContext
-    @StateObject private var viewModel = TaskPanelViewModel.sample()
+    @StateObject private var viewModel = TaskPanelViewModel.empty()
     @StateObject private var hotKeyService = GlobalHotKeyService()
     @StateObject private var speechInputService = SpeechInputService()
     private let launchAtLoginService = LaunchAtLoginService()

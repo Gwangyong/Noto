@@ -56,16 +56,10 @@ final class TaskPanelViewModel: ObservableObject {
         tasks.filter { !$0.isDone }.count
     }
 
-    static func sample() -> TaskPanelViewModel {
+    static func empty() -> TaskPanelViewModel {
         TaskPanelViewModel(
-            goal: "발표 끝내고 디자인 리뷰까지",
-            tasks: [
-                SampleTask(title: "디자인 시스템 토큰 정리", isDone: true),
-                SampleTask(title: "컴포넌트 라이브러리 업데이트", isDone: false),
-                SampleTask(title: "클라이언트 발표 자료 준비", isDone: false),
-                SampleTask(title: "모닝 루틴 · 하루 계획", isDone: true),
-                SampleTask(title: "그리드 시스템 리팩토링", isDone: false)
-            ],
+            goal: "",
+            tasks: [],
             settings: TaskPanelSettings(
                 launchAtLogin: true,
                 keepOnTop: true,
@@ -74,6 +68,10 @@ final class TaskPanelViewModel: ObservableObject {
                 hotKey: .default
             )
         )
+    }
+
+    static func sample() -> TaskPanelViewModel {
+        empty()
     }
 
     func applySnapshot(_ snapshot: TaskPanelSnapshot) {
