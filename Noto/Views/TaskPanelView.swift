@@ -11,14 +11,6 @@ private enum TaskPanelFocusField: Hashable {
     case quickAdd
 }
 
-private enum NotoAppStoreLink {
-    private static let appID = "6782915254"
-
-    static let appPage = URL(string: "https://apps.apple.com/app/id\(appID)")
-    static let writeReview = URL(string: "macappstore://itunes.apple.com/app/id\(appID)?action=write-review")
-    static let webWriteReview = URL(string: "https://apps.apple.com/app/id\(appID)?action=write-review")
-}
-
 private let taskRowReorderType = UTType(exportedAs: "com.gwangyong.noto.task-row-reorder")
 private let taskRowReorderPasteboardType = NSPasteboard.PasteboardType(taskRowReorderType.identifier)
 
@@ -1950,8 +1942,6 @@ private struct ModalActionButton: View {
 }
 
 private struct SettingsPanelView: View {
-    private static let feedbackURL = URL(string: "https://docs.google.com/forms/d/e/1FAIpQLSdjJzn9EhJdAtv8fqYKtTJnfdCpFq27B5F9sVvplzm2W9aKxQ/viewform")
-
     let settings: TaskPanelSettings
     let onBack: () -> Void
     let onCollapse: () -> Void
@@ -2018,7 +2008,7 @@ private struct SettingsPanelView: View {
 
                     HStack {
                         Spacer()
-                        Text("version 1.0.0")
+                        Text(AppVersionService.current.settingsDisplayText)
                     }
                     .font(DesignTokens.Typography.settingsMeta)
                     .foregroundStyle(DesignTokens.Colors.textMuted)
@@ -2033,7 +2023,7 @@ private struct SettingsPanelView: View {
     }
 
     private func openFeedbackForm() {
-        guard let feedbackURL = Self.feedbackURL else {
+        guard let feedbackURL = NotoSupportLink.feedbackForm else {
             NSSound.beep()
             return
         }
@@ -2042,7 +2032,7 @@ private struct SettingsPanelView: View {
     }
 
     private func openAppStorePage() {
-        guard let appPageURL = NotoAppStoreLink.appPage else {
+        guard let appPageURL = NotoSupportLink.appPage else {
             NSSound.beep()
             return
         }
@@ -2051,12 +2041,12 @@ private struct SettingsPanelView: View {
     }
 
     private func openAppStoreReview() {
-        guard let reviewURL = NotoAppStoreLink.writeReview else {
+        guard let reviewURL = NotoSupportLink.writeReview else {
             NSSound.beep()
             return
         }
 
-        if !NSWorkspace.shared.open(reviewURL), let fallbackURL = NotoAppStoreLink.webWriteReview {
+        if !NSWorkspace.shared.open(reviewURL), let fallbackURL = NotoSupportLink.webWriteReview {
             NSWorkspace.shared.open(fallbackURL)
         }
     }
