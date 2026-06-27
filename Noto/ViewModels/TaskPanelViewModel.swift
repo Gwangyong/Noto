@@ -64,6 +64,7 @@ final class TaskPanelViewModel: ObservableObject {
                 launchAtLogin: true,
                 keepOnTop: true,
                 completionSound: false,
+                showsMenuBarIcon: true,
                 theme: .system,
                 hotKey: .default
             )
@@ -206,6 +207,11 @@ final class TaskPanelViewModel: ObservableObject {
 
     func toggleCompletionSound() {
         settings.completionSound.toggle()
+        persistSnapshot()
+    }
+
+    func toggleMenuBarIcon() {
+        settings.showsMenuBarIcon.toggle()
         persistSnapshot()
     }
 

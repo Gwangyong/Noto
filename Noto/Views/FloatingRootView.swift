@@ -12,11 +12,15 @@ struct FloatingRootView: View {
     @StateObject private var viewModel = TaskPanelViewModel.empty()
     @StateObject private var hotKeyService = GlobalHotKeyService()
     @StateObject private var speechInputService = SpeechInputService()
+    @StateObject private var menuBarController = MenuBarController()
     private let launchAtLoginService = LaunchAtLoginService()
     private let completionSoundService = CompletionSoundService()
+    private let appUpdateService = AppUpdateService()
     @State private var isPanelOpen = true
     @State private var isPanelPresentedByHotKey = false
     @State private var isRecordingHotKey = false
+    @State private var isCheckingForUpdate = false
+    @State private var updateCheckAlert: UpdateCheckAlert?
     @State private var systemColorScheme = TaskPanelSettings.Theme.currentSystemColorScheme
     @State private var characterScreenOrigin = CGPoint(x: 72, y: 74)
     @State private var characterLocalOrigin = CGPoint(x: 28, y: 28)
@@ -29,6 +33,10 @@ struct FloatingRootView: View {
     @State private var persistenceStore: TaskPanelStore?
     @State private var didLoadPersistedState = false
     @State private var didResolveInitialPosition = false
+    #if DEBUG
+    @State private var didPresentDebugUpdateAlerts = false
+    @State private var pendingDebugUpdateAlerts: [UpdateCheckAlert] = []
+    #endif
     @GestureState private var isPressing = false
 
     var body: some View {
@@ -44,10 +52,18 @@ struct FloatingRootView: View {
                     onQuickAddMic: toggleSpeechInput,
                     onQuickAddSubmit: submitQuickTask,
                     onToggleLaunchAtLogin: toggleLaunchAtLogin,
+                    onToggleMenuBarIcon: viewModel.toggleMenuBarIcon,
                     onHotKeyRecordingChange: { isRecording in
                         isRecordingHotKey = isRecording
                         updateGlobalHotKeyRegistration()
-                    }
+                    },
+                    isCheckingForUpdate: isCheckingForUpdate,
+                    updateCheckAlert: updateCheckAlert,
+                    onCheckUpdate: checkForUpdate,
+                    onDismissUpdateAlert: dismissUpdateCheckAlert,
+                    onOpenUpdateStore: openUpdateStorePage,
+                    onPreviewUpToDateAlert: previewUpToDateAlert,
+                    onPreviewUpdateAvailableAlert: previewUpdateAvailableAlert
                 )
                 .position(
                     x: panelLocalOrigin.x + DesignTokens.Size.panelWidth / 2,
@@ -87,18 +103,22 @@ struct FloatingRootView: View {
             }
         )
         .onAppear {
+            configureMenuBarController()
             updateSystemColorScheme()
             configurePersistenceIfNeeded()
+            presentDebugUpdateAlertsIfNeeded()
             if let floatingWindow {
                 updateFloatingWindowAppearance(floatingWindow)
             }
             updateFloatingWindowLayout()
             updateGlobalHotKeyRegistration()
+            updateMenuBarController()
         }
         .onChange(of: isPanelOpen) { _, _ in
             withoutAnimation {
                 updateFloatingWindowLayout(animated: false)
             }
+            updateMenuBarController()
         }
         .onChange(of: viewModel.screen) { _, _ in
             withoutAnimation {
@@ -115,6 +135,12 @@ struct FloatingRootView: View {
             if let floatingWindow {
                 updateFloatingWindowAppearance(floatingWindow)
             }
+        }
+        .onChange(of: viewModel.settings.showsMenuBarIcon) { _, _ in
+            updateMenuBarController()
+        }
+        .onChange(of: viewModel.remainingCount) { _, _ in
+            updateMenuBarController()
         }
         .onReceive(DistributedNotificationCenter.default().publisher(for: .appleInterfaceThemeChanged)) { _ in
             updateSystemColorScheme()
@@ -135,6 +161,7 @@ struct FloatingRootView: View {
         }
         .onDisappear {
             hotKeyService.unregister()
+            menuBarController.invalidate()
         }
     }
 
@@ -205,6 +232,51 @@ struct FloatingRootView: View {
         hotKeyService.register(viewModel.settings.hotKey) {
             handleHotKeyTrigger()
         }
+    }
+
+    private func configureMenuBarController() {
+        menuBarController.onTogglePanel = {
+            togglePanelFromMenuBar()
+        }
+        menuBarController.onOpenSettings = {
+            openSettingsFromMenuBar()
+        }
+        menuBarController.onCheckForUpdates = {
+            checkForUpdateFromMenuBar()
+        }
+        menuBarController.onQuit = {
+            NSApplication.shared.terminate(nil)
+        }
+    }
+
+    private func updateMenuBarController() {
+        menuBarController.update(
+            isVisible: viewModel.settings.showsMenuBarIcon,
+            remainingCount: viewModel.remainingCount,
+            isPanelOpen: isPanelOpen
+        )
+    }
+
+    private func togglePanelFromMenuBar() {
+        isPanelPresentedByHotKey = false
+        setPanelOpen(!isPanelOpen, activateAppWhenOpening: true)
+    }
+
+    private func openSettingsFromMenuBar() {
+        isPanelPresentedByHotKey = false
+        bringFloatingWindowForward(activateApp: true)
+
+        withoutAnimation {
+            viewModel.showSettings()
+            isPanelOpen = true
+            updateFloatingWindowLayout(animated: false)
+        }
+    }
+
+    private func checkForUpdateFromMenuBar() {
+        isPanelPresentedByHotKey = false
+        setPanelOpen(true, activateAppWhenOpening: true)
+        checkForUpdate()
     }
 
     private func bringFloatingWindowForward(activateApp: Bool = false) {
@@ -355,6 +427,92 @@ struct FloatingRootView: View {
         let recognizedText = transcript.displayText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !recognizedText.isEmpty else { return }
         viewModel.quickAddText = recognizedText
+    }
+
+    private func checkForUpdate() {
+        guard !isCheckingForUpdate else { return }
+
+        isCheckingForUpdate = true
+
+        Task {
+            let nextAlert: UpdateCheckAlert
+
+            do {
+                let status = try await appUpdateService.checkForUpdate(
+                    currentVersion: AppVersionService.current.marketingVersion
+                )
+                switch status {
+                case .upToDate(let currentVersion):
+                    nextAlert = .upToDate(currentVersion: currentVersion)
+                case .updateAvailable(let currentVersion, let latestVersion, let appStoreURL):
+                    nextAlert = .updateAvailable(
+                        currentVersion: currentVersion,
+                        latestVersion: latestVersion,
+                        appStoreURL: appStoreURL
+                    )
+                }
+            } catch {
+                nextAlert = .failed(message: error.localizedDescription)
+            }
+
+            await MainActor.run {
+                isCheckingForUpdate = false
+                updateCheckAlert = nextAlert
+            }
+        }
+    }
+
+    private func previewUpToDateAlert() {
+        updateCheckAlert = .upToDate(currentVersion: AppVersionService.current.marketingVersion)
+    }
+
+    private func previewUpdateAvailableAlert() {
+        updateCheckAlert = .updateAvailable(
+            currentVersion: "1.0.0",
+            latestVersion: "1.1.0",
+            appStoreURL: NotoSupportLink.appPage
+        )
+    }
+
+    private func dismissUpdateCheckAlert() {
+        #if DEBUG
+        if !pendingDebugUpdateAlerts.isEmpty {
+            updateCheckAlert = pendingDebugUpdateAlerts.removeFirst()
+            return
+        }
+        #endif
+
+        updateCheckAlert = nil
+    }
+
+    private func openUpdateStorePage(_ url: URL?) {
+        guard let url else {
+            NSSound.beep()
+            dismissUpdateCheckAlert()
+            return
+        }
+
+        NSWorkspace.shared.open(url)
+        dismissUpdateCheckAlert()
+    }
+
+    private func presentDebugUpdateAlertsIfNeeded() {
+        #if DEBUG
+        guard !didPresentDebugUpdateAlerts,
+              ProcessInfo.processInfo.arguments.contains("--preview-update-alerts")
+        else { return }
+
+        didPresentDebugUpdateAlerts = true
+        viewModel.showSettings()
+        pendingDebugUpdateAlerts = [
+            .updateAvailable(
+                currentVersion: "1.0.0",
+                latestVersion: "1.1.0",
+                appStoreURL: NotoSupportLink.appPage
+            )
+        ]
+        updateCheckAlert = .upToDate(currentVersion: AppVersionService.current.marketingVersion)
+        #endif
     }
 
     private func toggleLaunchAtLogin() {

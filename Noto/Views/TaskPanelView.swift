@@ -27,20 +27,20 @@ struct TaskPanelView: View {
     let onQuickAddMic: () -> Void
     let onQuickAddSubmit: () -> Void
     let onToggleLaunchAtLogin: () -> Void
+    let onToggleMenuBarIcon: () -> Void
     let onHotKeyRecordingChange: (Bool) -> Void
+    let isCheckingForUpdate: Bool
+    let updateCheckAlert: UpdateCheckAlert?
+    let onCheckUpdate: () -> Void
+    let onDismissUpdateAlert: () -> Void
+    let onOpenUpdateStore: (URL?) -> Void
+    let onPreviewUpToDateAlert: () -> Void
+    let onPreviewUpdateAvailableAlert: () -> Void
 
     @FocusState private var focusedField: TaskPanelFocusField?
     @State private var isEditingGoal = false
     @State private var draggingTaskID: SampleTask.ID?
     @State private var isRecordingHotKey = false
-    @State private var isCheckingForUpdate = false
-    @State private var updateCheckAlert: UpdateCheckAlert?
-    #if DEBUG
-    @State private var didPresentDebugUpdateAlerts = false
-    @State private var pendingDebugUpdateAlerts: [UpdateCheckAlert] = []
-    #endif
-
-    private let appUpdateService = AppUpdateService()
 
     private var panelHeight: CGFloat {
         viewModel.screen == .settings
@@ -83,8 +83,8 @@ struct TaskPanelView: View {
             } else if let updateCheckAlert {
                 UpdateCheckAlertView(
                     alert: updateCheckAlert,
-                    onDismiss: dismissUpdateCheckAlert,
-                    onOpenStore: openUpdateStorePage
+                    onDismiss: onDismissUpdateAlert,
+                    onOpenStore: onOpenUpdateStore
                 )
                 .frame(width: DesignTokens.Size.panelWidth, height: panelHeight)
                 .transition(.opacity.combined(with: .scale(scale: DesignTokens.Motion.modalOpenInitialScale)))
@@ -95,9 +95,6 @@ struct TaskPanelView: View {
         .onChange(of: viewModel.screen) { _, screen in
             guard screen != .settings else { return }
             setHotKeyRecording(false)
-        }
-        .onAppear {
-            presentDebugUpdateAlertsIfNeeded()
         }
         .onDisappear {
             setHotKeyRecording(false)
@@ -220,6 +217,7 @@ struct TaskPanelView: View {
             onToggleLogin: onToggleLaunchAtLogin,
             onToggleOnTop: viewModel.toggleKeepOnTop,
             onToggleSound: viewModel.toggleCompletionSound,
+            onToggleMenuBarIcon: onToggleMenuBarIcon,
             onTheme: viewModel.setTheme,
             isRecordingHotKey: Binding(
                 get: { isRecordingHotKey },
@@ -227,96 +225,10 @@ struct TaskPanelView: View {
             ),
             onHotKey: viewModel.setHotKey,
             isCheckingForUpdate: isCheckingForUpdate,
-            onCheckUpdate: checkForUpdate,
-            onPreviewUpToDateAlert: previewUpToDateAlert,
-            onPreviewUpdateAvailableAlert: previewUpdateAvailableAlert
+            onCheckUpdate: onCheckUpdate,
+            onPreviewUpToDateAlert: onPreviewUpToDateAlert,
+            onPreviewUpdateAvailableAlert: onPreviewUpdateAvailableAlert
         )
-    }
-
-    private func checkForUpdate() {
-        guard !isCheckingForUpdate else { return }
-
-        isCheckingForUpdate = true
-
-        Task {
-            let nextAlert: UpdateCheckAlert
-
-            do {
-                let status = try await appUpdateService.checkForUpdate(
-                    currentVersion: AppVersionService.current.marketingVersion
-                )
-                switch status {
-                case .upToDate(let currentVersion):
-                    nextAlert = .upToDate(currentVersion: currentVersion)
-                case .updateAvailable(let currentVersion, let latestVersion, let appStoreURL):
-                    nextAlert = .updateAvailable(
-                        currentVersion: currentVersion,
-                        latestVersion: latestVersion,
-                        appStoreURL: appStoreURL
-                    )
-                }
-            } catch {
-                nextAlert = .failed(message: error.localizedDescription)
-            }
-
-            await MainActor.run {
-                isCheckingForUpdate = false
-                updateCheckAlert = nextAlert
-            }
-        }
-    }
-
-    private func previewUpToDateAlert() {
-        updateCheckAlert = .upToDate(currentVersion: AppVersionService.current.marketingVersion)
-    }
-
-    private func previewUpdateAvailableAlert() {
-        updateCheckAlert = .updateAvailable(
-            currentVersion: "1.0.0",
-            latestVersion: "1.1.0",
-            appStoreURL: NotoSupportLink.appPage
-        )
-    }
-
-    private func dismissUpdateCheckAlert() {
-        #if DEBUG
-        if !pendingDebugUpdateAlerts.isEmpty {
-            updateCheckAlert = pendingDebugUpdateAlerts.removeFirst()
-            return
-        }
-        #endif
-
-        updateCheckAlert = nil
-    }
-
-    private func openUpdateStorePage(_ url: URL?) {
-        guard let url else {
-            NSSound.beep()
-            dismissUpdateCheckAlert()
-            return
-        }
-
-        NSWorkspace.shared.open(url)
-        dismissUpdateCheckAlert()
-    }
-
-    private func presentDebugUpdateAlertsIfNeeded() {
-        #if DEBUG
-        guard !didPresentDebugUpdateAlerts,
-              ProcessInfo.processInfo.arguments.contains("--preview-update-alerts")
-        else { return }
-
-        didPresentDebugUpdateAlerts = true
-        viewModel.showSettings()
-        pendingDebugUpdateAlerts = [
-            .updateAvailable(
-                currentVersion: "1.0.0",
-                latestVersion: "1.1.0",
-                appStoreURL: NotoSupportLink.appPage
-            )
-        ]
-        updateCheckAlert = .upToDate(currentVersion: AppVersionService.current.marketingVersion)
-        #endif
     }
 
     private func setHotKeyRecording(_ isRecording: Bool) {
@@ -1380,7 +1292,7 @@ private struct QuickAddTextEditor: NSViewRepresentable {
     let onSelectionChange: (NSRange) -> Void
 
     func makeNSView(context: Context) -> NSScrollView {
-        let scrollView = NSScrollView()
+        let scrollView = QuickAddScrollView()
         scrollView.drawsBackground = false
         scrollView.borderType = .noBorder
         scrollView.hasVerticalScroller = false
@@ -1429,6 +1341,7 @@ private struct QuickAddTextEditor: NSViewRepresentable {
         textView.setExternalText(text)
 
         scrollView.documentView = textView
+        scrollView.syncDocumentLayout()
         context.coordinator.textView = textView
         return scrollView
     }
@@ -1438,7 +1351,10 @@ private struct QuickAddTextEditor: NSViewRepresentable {
         guard let textView = scrollView.documentView as? QuickAddTextView else { return }
 
         textView.placeholder = placeholder
-        textView.updateContainerWidth(scrollView.contentSize.width)
+        (scrollView as? QuickAddScrollView)?.syncDocumentLayout()
+        if scrollView.contentSize.width > 0 {
+            textView.updateContainerWidth(scrollView.contentSize.width)
+        }
         if textView.string != text {
             textView.setExternalText(text)
         }
@@ -1530,6 +1446,66 @@ private struct QuickAddTextEditor: NSViewRepresentable {
     }
 }
 
+private final class QuickAddScrollView: NSScrollView {
+    private var lastSyncedWidth: CGFloat = 0
+    private weak var lastSyncedDocumentView: NSView?
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        true
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        syncDocumentLayout()
+        guard let textView = documentView as? QuickAddTextView else {
+            super.mouseDown(with: event)
+            return
+        }
+
+        window?.makeKey()
+        window?.makeFirstResponder(textView)
+
+        let eventPoint = textView.convert(event.locationInWindow, from: nil)
+        guard textView.bounds.contains(eventPoint) else {
+            textView.setSelectedRange(NSRange(location: textView.string.utf16.count, length: 0))
+            return
+        }
+
+        super.mouseDown(with: event)
+    }
+
+    override func layout() {
+        super.layout()
+        syncDocumentLayout()
+    }
+
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        syncDocumentLayout()
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        DispatchQueue.main.async { [weak self] in
+            self?.syncDocumentLayout()
+        }
+    }
+
+    func syncDocumentLayout() {
+        let width = contentSize.width
+        guard width > 0,
+              let textView = documentView as? QuickAddTextView
+        else { return }
+
+        let documentDidChange = lastSyncedDocumentView !== textView
+        guard documentDidChange || abs(lastSyncedWidth - width) > 0.5 else { return }
+
+        lastSyncedWidth = width
+        lastSyncedDocumentView = textView
+        textView.updateContainerWidth(width)
+        textView.needsDisplay = true
+    }
+}
+
 private final class QuickAddTextView: NSTextView {
     var placeholder = ""
     var placeholderColor = NSColor.secondaryLabelColor
@@ -1546,6 +1522,16 @@ private final class QuickAddTextView: NSTextView {
 
     override var acceptsFirstResponder: Bool {
         true
+    }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        true
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        window?.makeKey()
+        window?.makeFirstResponder(self)
+        super.mouseDown(with: event)
     }
 
     override func keyDown(with event: NSEvent) {
@@ -2090,6 +2076,7 @@ private struct SettingsPanelView: View {
     let onToggleLogin: () -> Void
     let onToggleOnTop: () -> Void
     let onToggleSound: () -> Void
+    let onToggleMenuBarIcon: () -> Void
     let onTheme: (TaskPanelSettings.Theme) -> Void
     @Binding var isRecordingHotKey: Bool
     let onHotKey: (TaskPanelHotKey) -> Void
@@ -2131,6 +2118,8 @@ private struct SettingsPanelView: View {
                         SettingsToggleRow(title: "시동 시 실행", subtitle: "노트북이 켜질 때마다 자동으로 실행돼요.", isOn: settings.launchAtLogin, action: onToggleLogin)
                         SettingsDivider()
                         SettingsToggleRow(title: "항상 위에 표시", subtitle: "언제나 다른 창에 가려지지 않아요!", isOn: settings.keepOnTop, action: onToggleOnTop)
+                        SettingsDivider()
+                        SettingsToggleRow(title: "메뉴바 아이콘 표시", subtitle: "상단 메뉴바에서 Noto 상태를 확인해요.", isOn: settings.showsMenuBarIcon, action: onToggleMenuBarIcon)
                         SettingsDivider()
                         SettingsToggleRow(title: "완료 효과음", isOn: settings.completionSound, action: onToggleSound)
                     }
@@ -2598,7 +2587,15 @@ private struct SupportActionRow<Trailing: View>: View {
         onQuickAddMic: {},
         onQuickAddSubmit: {},
         onToggleLaunchAtLogin: {},
-        onHotKeyRecordingChange: { _ in }
+        onToggleMenuBarIcon: {},
+        onHotKeyRecordingChange: { _ in },
+        isCheckingForUpdate: false,
+        updateCheckAlert: nil,
+        onCheckUpdate: {},
+        onDismissUpdateAlert: {},
+        onOpenUpdateStore: { _ in },
+        onPreviewUpToDateAlert: {},
+        onPreviewUpdateAvailableAlert: {}
     )
         .padding(40)
         .background(DesignTokens.Colors.documentBackground)
