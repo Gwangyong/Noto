@@ -60,6 +60,8 @@ final class MenuBarController: NSObject, ObservableObject {
 
     private func rebuildMenu() {
         let menu = NSMenu()
+        menu.autoenablesItems = false
+        menu.showsStateColumn = false
 
         menu.addItem(
             menuItem(
@@ -67,7 +69,7 @@ final class MenuBarController: NSObject, ObservableObject {
                 action: #selector(togglePanel)
             )
         )
-        menu.addItem(menuItem(title: "설정 열기", action: #selector(openSettings)))
+        menu.addItem(menuItem(title: "설정 열기", action: #selector(openSettingsFromMenu)))
         menu.addItem(menuItem(title: "업데이트 확인", action: #selector(checkForUpdates)))
         menu.addItem(.separator())
         menu.addItem(menuItem(title: "종료", action: #selector(quit)))
@@ -78,6 +80,12 @@ final class MenuBarController: NSObject, ObservableObject {
     private func menuItem(title: String, action: Selector) -> NSMenuItem {
         let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
         item.target = self
+        item.isEnabled = true
+        item.image = nil
+        item.onStateImage = nil
+        item.offStateImage = nil
+        item.mixedStateImage = nil
+        item.state = .off
         return item
     }
 
@@ -85,7 +93,7 @@ final class MenuBarController: NSObject, ObservableObject {
         onTogglePanel?()
     }
 
-    @objc private func openSettings() {
+    @objc private func openSettingsFromMenu() {
         onOpenSettings?()
     }
 
