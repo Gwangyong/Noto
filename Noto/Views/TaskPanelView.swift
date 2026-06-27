@@ -33,11 +33,23 @@ struct TaskPanelView: View {
     @State private var isEditingGoal = false
     @State private var draggingTaskID: SampleTask.ID?
     @State private var isRecordingHotKey = false
+    @State private var isCheckingForUpdate = false
+    @State private var updateCheckAlert: UpdateCheckAlert?
+    #if DEBUG
+    @State private var didPresentDebugUpdateAlerts = false
+    @State private var pendingDebugUpdateAlerts: [UpdateCheckAlert] = []
+    #endif
+
+    private let appUpdateService = AppUpdateService()
 
     private var panelHeight: CGFloat {
         viewModel.screen == .settings
             ? DesignTokens.Size.settingsPanelHeight
             : DesignTokens.Size.panelHeight
+    }
+
+    private var isModalPresented: Bool {
+        viewModel.showingDeleteAllConfirm || updateCheckAlert != nil
     }
 
     var body: some View {
@@ -58,8 +70,8 @@ struct TaskPanelView: View {
                     .stroke(DesignTokens.Colors.hairline, lineWidth: 0.6)
             )
             .shadow(color: Color.black.opacity(0.05), radius: 3, x: 0, y: 1)
-            .blur(radius: viewModel.showingDeleteAllConfirm ? 4 : 0)
-            .allowsHitTesting(!viewModel.showingDeleteAllConfirm)
+            .blur(radius: isModalPresented ? 4 : 0)
+            .allowsHitTesting(!isModalPresented)
 
             if viewModel.showingDeleteAllConfirm {
                 DeleteAllConfirmView(
@@ -68,13 +80,24 @@ struct TaskPanelView: View {
                 )
                 .frame(width: DesignTokens.Size.panelWidth, height: panelHeight)
                 .transition(.opacity.combined(with: .scale(scale: DesignTokens.Motion.modalOpenInitialScale)))
+            } else if let updateCheckAlert {
+                UpdateCheckAlertView(
+                    alert: updateCheckAlert,
+                    onDismiss: dismissUpdateCheckAlert,
+                    onOpenStore: openUpdateStorePage
+                )
+                .frame(width: DesignTokens.Size.panelWidth, height: panelHeight)
+                .transition(.opacity.combined(with: .scale(scale: DesignTokens.Motion.modalOpenInitialScale)))
             }
         }
         .animation(.easeOut(duration: DesignTokens.Motion.panelOpenDuration), value: viewModel.screen)
-        .animation(.easeOut(duration: DesignTokens.Motion.modalOpenDuration), value: viewModel.showingDeleteAllConfirm)
+        .animation(.easeOut(duration: DesignTokens.Motion.modalOpenDuration), value: isModalPresented)
         .onChange(of: viewModel.screen) { _, screen in
             guard screen != .settings else { return }
             setHotKeyRecording(false)
+        }
+        .onAppear {
+            presentDebugUpdateAlertsIfNeeded()
         }
         .onDisappear {
             setHotKeyRecording(false)
@@ -202,8 +225,98 @@ struct TaskPanelView: View {
                 get: { isRecordingHotKey },
                 set: { setHotKeyRecording($0) }
             ),
-            onHotKey: viewModel.setHotKey
+            onHotKey: viewModel.setHotKey,
+            isCheckingForUpdate: isCheckingForUpdate,
+            onCheckUpdate: checkForUpdate,
+            onPreviewUpToDateAlert: previewUpToDateAlert,
+            onPreviewUpdateAvailableAlert: previewUpdateAvailableAlert
         )
+    }
+
+    private func checkForUpdate() {
+        guard !isCheckingForUpdate else { return }
+
+        isCheckingForUpdate = true
+
+        Task {
+            let nextAlert: UpdateCheckAlert
+
+            do {
+                let status = try await appUpdateService.checkForUpdate(
+                    currentVersion: AppVersionService.current.marketingVersion
+                )
+                switch status {
+                case .upToDate(let currentVersion):
+                    nextAlert = .upToDate(currentVersion: currentVersion)
+                case .updateAvailable(let currentVersion, let latestVersion, let appStoreURL):
+                    nextAlert = .updateAvailable(
+                        currentVersion: currentVersion,
+                        latestVersion: latestVersion,
+                        appStoreURL: appStoreURL
+                    )
+                }
+            } catch {
+                nextAlert = .failed(message: error.localizedDescription)
+            }
+
+            await MainActor.run {
+                isCheckingForUpdate = false
+                updateCheckAlert = nextAlert
+            }
+        }
+    }
+
+    private func previewUpToDateAlert() {
+        updateCheckAlert = .upToDate(currentVersion: AppVersionService.current.marketingVersion)
+    }
+
+    private func previewUpdateAvailableAlert() {
+        updateCheckAlert = .updateAvailable(
+            currentVersion: "1.0.0",
+            latestVersion: "1.1.0",
+            appStoreURL: NotoSupportLink.appPage
+        )
+    }
+
+    private func dismissUpdateCheckAlert() {
+        #if DEBUG
+        if !pendingDebugUpdateAlerts.isEmpty {
+            updateCheckAlert = pendingDebugUpdateAlerts.removeFirst()
+            return
+        }
+        #endif
+
+        updateCheckAlert = nil
+    }
+
+    private func openUpdateStorePage(_ url: URL?) {
+        guard let url else {
+            NSSound.beep()
+            dismissUpdateCheckAlert()
+            return
+        }
+
+        NSWorkspace.shared.open(url)
+        dismissUpdateCheckAlert()
+    }
+
+    private func presentDebugUpdateAlertsIfNeeded() {
+        #if DEBUG
+        guard !didPresentDebugUpdateAlerts,
+              ProcessInfo.processInfo.arguments.contains("--preview-update-alerts")
+        else { return }
+
+        didPresentDebugUpdateAlerts = true
+        viewModel.showSettings()
+        pendingDebugUpdateAlerts = [
+            .updateAvailable(
+                currentVersion: "1.0.0",
+                latestVersion: "1.1.0",
+                appStoreURL: NotoSupportLink.appPage
+            )
+        ]
+        updateCheckAlert = .upToDate(currentVersion: AppVersionService.current.marketingVersion)
+        #endif
     }
 
     private func setHotKeyRecording(_ isRecording: Bool) {
@@ -1938,7 +2051,7 @@ private struct DeleteAllConfirmView: View {
     }
 }
 
-private struct ModalActionButton: View {
+struct ModalActionButton: View {
     let title: String
     let font: Font
     let foreground: Color
@@ -1980,6 +2093,10 @@ private struct SettingsPanelView: View {
     let onTheme: (TaskPanelSettings.Theme) -> Void
     @Binding var isRecordingHotKey: Bool
     let onHotKey: (TaskPanelHotKey) -> Void
+    let isCheckingForUpdate: Bool
+    let onCheckUpdate: () -> Void
+    let onPreviewUpToDateAlert: () -> Void
+    let onPreviewUpdateAvailableAlert: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -2029,9 +2146,13 @@ private struct SettingsPanelView: View {
                         .padding(.top, 13)
 
                     SupportSectionView(
+                        isCheckingForUpdate: isCheckingForUpdate,
+                        onCheckUpdate: onCheckUpdate,
                         onFeedback: openFeedbackForm,
                         onShare: openAppStorePage,
-                        onRate: openAppStoreReview
+                        onRate: openAppStoreReview,
+                        onPreviewUpToDateAlert: onPreviewUpToDateAlert,
+                        onPreviewUpdateAvailableAlert: onPreviewUpdateAvailableAlert
                     )
                     .padding(.top, 17)
 
@@ -2349,9 +2470,13 @@ private final class HotKeyRecorderNSView: NSView {
 }
 
 private struct SupportSectionView: View {
+    let isCheckingForUpdate: Bool
+    let onCheckUpdate: () -> Void
     let onFeedback: () -> Void
     let onShare: () -> Void
     let onRate: () -> Void
+    let onPreviewUpToDateAlert: () -> Void
+    let onPreviewUpdateAvailableAlert: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 11) {
@@ -2359,6 +2484,17 @@ private struct SupportSectionView: View {
 
             SettingsSectionLabel(title: "지원", meta: "SUPPORT")
                 .padding(.top, 6)
+
+            SupportActionRow(title: "업데이트 확인", action: onCheckUpdate) {
+                if isCheckingForUpdate {
+                    ProgressView()
+                        .controlSize(.small)
+                        .scaleEffect(0.62)
+                } else {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                }
+            }
+            .disabled(isCheckingForUpdate)
 
             SupportActionRow(title: "문의 및 피드백", systemName: "arrow.up.right.square", action: onFeedback)
             SupportActionRow(title: "앱 공유하기", systemName: "square.and.arrow.up", action: onShare)
@@ -2371,9 +2507,36 @@ private struct SupportSectionView: View {
                 }
                 .foregroundStyle(DesignTokens.Colors.rating)
             }
+
+            #if DEBUG
+            UpdateAlertPreviewSection(
+                onPreviewUpToDateAlert: onPreviewUpToDateAlert,
+                onPreviewUpdateAvailableAlert: onPreviewUpdateAvailableAlert
+            )
+            .padding(.top, 4)
+            #endif
         }
     }
 }
+
+#if DEBUG
+private struct UpdateAlertPreviewSection: View {
+    let onPreviewUpToDateAlert: () -> Void
+    let onPreviewUpdateAvailableAlert: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SettingsDivider()
+
+            SettingsSectionLabel(title: "업데이트 미리보기", meta: "DEBUG")
+                .padding(.top, 2)
+
+            SupportActionRow(title: "최신 버전 알럿 보기", systemName: "checkmark.circle", action: onPreviewUpToDateAlert)
+            SupportActionRow(title: "업데이트 알럿 보기", systemName: "arrow.down.circle", action: onPreviewUpdateAvailableAlert)
+        }
+    }
+}
+#endif
 
 private struct SettingsSectionLabel: View {
     let title: String
