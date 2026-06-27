@@ -1427,6 +1427,9 @@ private final class QuickAddTextView: NSTextView {
     private(set) var isApplyingExternalText = false
     private var isHeightUpdateScheduled = false
     private var isMeasuringHeight = false
+    private var isFrameSizeUpdateScheduled = false
+    private var isScrollToInsertionPointScheduled = false
+    private var pendingFrameSize: NSSize?
 
     override var acceptsFirstResponder: Bool {
         true
@@ -1482,12 +1485,12 @@ private final class QuickAddTextView: NSTextView {
         isApplyingExternalText = false
         needsDisplay = true
         scheduleMeasuredHeightUpdate()
-        scrollToInsertionPoint()
+        scheduleScrollToInsertionPoint()
     }
 
     func applySelectedRange(_ range: NSRange, notifyChange: Bool = true) {
         setSelectedRange(clampedRange(range))
-        scrollToInsertionPoint()
+        scheduleScrollToInsertionPoint()
         if notifyChange {
             onSelectionChange?(selectedRange())
         }
@@ -1506,13 +1509,13 @@ private final class QuickAddTextView: NSTextView {
         onTextChange?(string)
         needsDisplay = true
         scheduleMeasuredHeightUpdate()
-        scrollToInsertionPoint()
+        scheduleScrollToInsertionPoint()
     }
 
     func updateContainerWidth(_ width: CGFloat) {
         let resolvedWidth = max(width, 1)
         if abs(frame.width - resolvedWidth) > 0.5 {
-            setFrameSize(NSSize(width: resolvedWidth, height: max(frame.height, quickAddMinTextHeight)))
+            scheduleFrameSizeUpdate(width: resolvedWidth, height: max(frame.height, quickAddMinTextHeight))
         }
         textContainer?.containerSize = NSSize(width: resolvedWidth, height: .greatestFiniteMagnitude)
         scheduleMeasuredHeightUpdate()
@@ -1543,12 +1546,28 @@ private final class QuickAddTextView: NSTextView {
         let usedRect = layoutManager.usedRect(for: textContainer)
         let contentHeight = max(quickAddMinTextHeight, ceil(usedRect.height + textContainerInset.height * 2))
         if abs(frame.height - contentHeight) > 0.5 {
-            setFrameSize(NSSize(width: availableWidth, height: contentHeight))
+            scheduleFrameSizeUpdate(width: availableWidth, height: contentHeight)
         }
 
         let visibleHeight = min(max(contentHeight, quickAddMinTextHeight), quickAddMaxTextHeight)
         updateScrollIndicatorVisibility(contentHeight: contentHeight)
         onHeightChange?(visibleHeight)
+    }
+
+    private func scheduleFrameSizeUpdate(width: CGFloat, height: CGFloat) {
+        pendingFrameSize = NSSize(width: width, height: height)
+        guard !isFrameSizeUpdateScheduled else { return }
+        isFrameSizeUpdateScheduled = true
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.isFrameSizeUpdateScheduled = false
+            guard let size = self.pendingFrameSize else { return }
+            self.pendingFrameSize = nil
+            guard abs(self.frame.width - size.width) > 0.5 || abs(self.frame.height - size.height) > 0.5 else { return }
+            self.setFrameSize(size)
+            self.scheduleMeasuredHeightUpdate()
+        }
     }
 
     private func updateScrollIndicatorVisibility(contentHeight: CGFloat) {
@@ -1563,6 +1582,17 @@ private final class QuickAddTextView: NSTextView {
         guard enclosingScrollView != nil else { return }
         let caretLocation = min(selectedRange().location, string.utf16.count)
         scrollRangeToVisible(NSRange(location: caretLocation, length: 0))
+    }
+
+    private func scheduleScrollToInsertionPoint() {
+        guard !isScrollToInsertionPointScheduled else { return }
+        isScrollToInsertionPointScheduled = true
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.isScrollToInsertionPointScheduled = false
+            self.scrollToInsertionPoint()
+        }
     }
 
     private func clampedRange(_ range: NSRange) -> NSRange {
