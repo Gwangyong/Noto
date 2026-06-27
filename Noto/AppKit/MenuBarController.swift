@@ -106,23 +106,32 @@ final class MenuBarController: NSObject, ObservableObject {
     }
 
     private static func makeStatusIcon() -> NSImage {
-        let size = NSSize(width: 15, height: 15)
+        let size = NSSize(width: 16, height: 16)
         let image = NSImage(size: size)
 
         image.lockFocus()
         NSColor.clear.setFill()
         NSRect(origin: .zero, size: size).fill()
 
-        let glyphRect = NSRect(x: 1.5, y: 1.5, width: 12, height: 12)
-        let glyphPath = NSBezierPath(roundedRect: glyphRect, xRadius: 4.5, yRadius: 4.5)
-        NSColor.controlAccentColor.withAlphaComponent(0.88).setFill()
-        glyphPath.fill()
+        NSColor.black.setStroke()
+        NSColor.black.setFill()
 
-        NSColor.white.withAlphaComponent(0.92).setFill()
-        NSBezierPath(ovalIn: NSRect(x: 6, y: 6, width: 3, height: 3)).fill()
+        let facePath = NSBezierPath(roundedRect: NSRect(x: 2.5, y: 2.5, width: 11, height: 11), xRadius: 4.5, yRadius: 4.5)
+        facePath.lineWidth = 1.6
+        facePath.stroke()
+
+        NSBezierPath(ovalIn: NSRect(x: 5.1, y: 8.1, width: 1.4, height: 1.4)).fill()
+        NSBezierPath(ovalIn: NSRect(x: 9.5, y: 8.1, width: 1.4, height: 1.4)).fill()
+
+        let mouthPath = NSBezierPath()
+        mouthPath.move(to: NSPoint(x: 6.3, y: 5.6))
+        mouthPath.line(to: NSPoint(x: 9.7, y: 5.6))
+        mouthPath.lineWidth = 1.2
+        mouthPath.lineCapStyle = .round
+        mouthPath.stroke()
 
         image.unlockFocus()
-        image.isTemplate = false
+        image.isTemplate = true
         return image
     }
 }
