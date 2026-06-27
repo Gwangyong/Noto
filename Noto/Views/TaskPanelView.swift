@@ -1292,7 +1292,7 @@ private struct QuickAddTextEditor: NSViewRepresentable {
     let onSelectionChange: (NSRange) -> Void
 
     func makeNSView(context: Context) -> NSScrollView {
-        let scrollView = NSScrollView()
+        let scrollView = QuickAddScrollView()
         scrollView.drawsBackground = false
         scrollView.borderType = .noBorder
         scrollView.hasVerticalScroller = false
@@ -1341,6 +1341,7 @@ private struct QuickAddTextEditor: NSViewRepresentable {
         textView.setExternalText(text)
 
         scrollView.documentView = textView
+        scrollView.syncDocumentLayout()
         context.coordinator.textView = textView
         return scrollView
     }
@@ -1350,7 +1351,10 @@ private struct QuickAddTextEditor: NSViewRepresentable {
         guard let textView = scrollView.documentView as? QuickAddTextView else { return }
 
         textView.placeholder = placeholder
-        textView.updateContainerWidth(scrollView.contentSize.width)
+        (scrollView as? QuickAddScrollView)?.syncDocumentLayout()
+        if scrollView.contentSize.width > 0 {
+            textView.updateContainerWidth(scrollView.contentSize.width)
+        }
         if textView.string != text {
             textView.setExternalText(text)
         }
@@ -1442,6 +1446,66 @@ private struct QuickAddTextEditor: NSViewRepresentable {
     }
 }
 
+private final class QuickAddScrollView: NSScrollView {
+    private var lastSyncedWidth: CGFloat = 0
+    private weak var lastSyncedDocumentView: NSView?
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        true
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        syncDocumentLayout()
+        guard let textView = documentView as? QuickAddTextView else {
+            super.mouseDown(with: event)
+            return
+        }
+
+        window?.makeKey()
+        window?.makeFirstResponder(textView)
+
+        let eventPoint = textView.convert(event.locationInWindow, from: nil)
+        guard textView.bounds.contains(eventPoint) else {
+            textView.setSelectedRange(NSRange(location: textView.string.utf16.count, length: 0))
+            return
+        }
+
+        super.mouseDown(with: event)
+    }
+
+    override func layout() {
+        super.layout()
+        syncDocumentLayout()
+    }
+
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        syncDocumentLayout()
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        DispatchQueue.main.async { [weak self] in
+            self?.syncDocumentLayout()
+        }
+    }
+
+    func syncDocumentLayout() {
+        let width = contentSize.width
+        guard width > 0,
+              let textView = documentView as? QuickAddTextView
+        else { return }
+
+        let documentDidChange = lastSyncedDocumentView !== textView
+        guard documentDidChange || abs(lastSyncedWidth - width) > 0.5 else { return }
+
+        lastSyncedWidth = width
+        lastSyncedDocumentView = textView
+        textView.updateContainerWidth(width)
+        textView.needsDisplay = true
+    }
+}
+
 private final class QuickAddTextView: NSTextView {
     var placeholder = ""
     var placeholderColor = NSColor.secondaryLabelColor
@@ -1458,6 +1522,16 @@ private final class QuickAddTextView: NSTextView {
 
     override var acceptsFirstResponder: Bool {
         true
+    }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        true
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        window?.makeKey()
+        window?.makeFirstResponder(self)
+        super.mouseDown(with: event)
     }
 
     override func keyDown(with event: NSEvent) {
