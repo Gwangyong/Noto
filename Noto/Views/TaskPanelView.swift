@@ -11,8 +11,7 @@ private enum TaskPanelFocusField: Hashable {
     case quickAdd
 }
 
-private let taskRowReorderType = UTType(exportedAs: "com.gwangyong.noto.task-row-reorder")
-private let taskRowReorderPasteboardType = NSPasteboard.PasteboardType(taskRowReorderType.identifier)
+private let taskRowReorderPasteboardType = NSPasteboard.PasteboardType("com.gwangyong.noto.task-row-reorder")
 
 private func isTaskRowReorderDrag(_ sender: NSDraggingInfo) -> Bool {
     sender.draggingPasteboard.availableType(from: [taskRowReorderPasteboardType]) != nil
@@ -943,7 +942,7 @@ private struct TaskRowView: View {
                             onDragStart()
                             let provider = NSItemProvider(object: task.id.uuidString as NSString)
                             provider.registerDataRepresentation(
-                                forTypeIdentifier: taskRowReorderType.identifier,
+                                forTypeIdentifier: taskRowReorderPasteboardType.rawValue,
                                 visibility: .all
                             ) { completion in
                                 completion(Data(task.id.uuidString.utf8), nil)
