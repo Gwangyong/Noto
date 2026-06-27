@@ -28,7 +28,7 @@ enum AppVersionService {
 }
 
 enum NotoSupportLink {
-    private static let appID = "6782915254"
+    static let appID = "6782915254"
 
     static let feedbackForm = URL(string: "https://docs.google.com/forms/d/e/1FAIpQLSdjJzn9EhJdAtv8fqYKtTJnfdCpFq27B5F9sVvplzm2W9aKxQ/viewform")
     static let appPage = URL(string: "https://apps.apple.com/app/id\(appID)")
