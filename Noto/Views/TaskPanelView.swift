@@ -11,12 +11,10 @@ private enum TaskPanelFocusField: Hashable {
     case quickAdd
 }
 
-private enum NotoAppStoreLink {
-    private static let appID = "6782915254"
+private let taskRowReorderPasteboardType = NSPasteboard.PasteboardType("com.gwangyong.noto.task-row-reorder")
 
-    static let appPage = URL(string: "https://apps.apple.com/app/id\(appID)")
-    static let writeReview = URL(string: "macappstore://itunes.apple.com/app/id\(appID)?action=write-review")
-    static let webWriteReview = URL(string: "https://apps.apple.com/app/id\(appID)?action=write-review")
+private func isTaskRowReorderDrag(_ sender: NSDraggingInfo) -> Bool {
+    sender.draggingPasteboard.availableType(from: [taskRowReorderPasteboardType]) != nil
 }
 
 struct TaskPanelView: View {
@@ -29,7 +27,15 @@ struct TaskPanelView: View {
     let onQuickAddMic: () -> Void
     let onQuickAddSubmit: () -> Void
     let onToggleLaunchAtLogin: () -> Void
+    let onToggleMenuBarIcon: () -> Void
     let onHotKeyRecordingChange: (Bool) -> Void
+    let isCheckingForUpdate: Bool
+    let updateCheckAlert: UpdateCheckAlert?
+    let onCheckUpdate: () -> Void
+    let onDismissUpdateAlert: () -> Void
+    let onOpenUpdateStore: (URL?) -> Void
+    let onPreviewUpToDateAlert: () -> Void
+    let onPreviewUpdateAvailableAlert: () -> Void
 
     @FocusState private var focusedField: TaskPanelFocusField?
     @State private var isEditingGoal = false
@@ -40,6 +46,10 @@ struct TaskPanelView: View {
         viewModel.screen == .settings
             ? DesignTokens.Size.settingsPanelHeight
             : DesignTokens.Size.panelHeight
+    }
+
+    private var isModalPresented: Bool {
+        viewModel.showingDeleteAllConfirm || updateCheckAlert != nil
     }
 
     var body: some View {
@@ -60,8 +70,8 @@ struct TaskPanelView: View {
                     .stroke(DesignTokens.Colors.hairline, lineWidth: 0.6)
             )
             .shadow(color: Color.black.opacity(0.05), radius: 3, x: 0, y: 1)
-            .blur(radius: viewModel.showingDeleteAllConfirm ? 4 : 0)
-            .allowsHitTesting(!viewModel.showingDeleteAllConfirm)
+            .blur(radius: isModalPresented ? 4 : 0)
+            .allowsHitTesting(!isModalPresented)
 
             if viewModel.showingDeleteAllConfirm {
                 DeleteAllConfirmView(
@@ -70,10 +80,18 @@ struct TaskPanelView: View {
                 )
                 .frame(width: DesignTokens.Size.panelWidth, height: panelHeight)
                 .transition(.opacity.combined(with: .scale(scale: DesignTokens.Motion.modalOpenInitialScale)))
+            } else if let updateCheckAlert {
+                UpdateCheckAlertView(
+                    alert: updateCheckAlert,
+                    onDismiss: onDismissUpdateAlert,
+                    onOpenStore: onOpenUpdateStore
+                )
+                .frame(width: DesignTokens.Size.panelWidth, height: panelHeight)
+                .transition(.opacity.combined(with: .scale(scale: DesignTokens.Motion.modalOpenInitialScale)))
             }
         }
         .animation(.easeOut(duration: DesignTokens.Motion.panelOpenDuration), value: viewModel.screen)
-        .animation(.easeOut(duration: DesignTokens.Motion.modalOpenDuration), value: viewModel.showingDeleteAllConfirm)
+        .animation(.easeOut(duration: DesignTokens.Motion.modalOpenDuration), value: isModalPresented)
         .onChange(of: viewModel.screen) { _, screen in
             guard screen != .settings else { return }
             setHotKeyRecording(false)
@@ -147,6 +165,12 @@ struct TaskPanelView: View {
                     .padding(.horizontal, 10)
                     .padding(.top, 12)
                     .padding(.bottom, 12)
+                    .background(
+                        TaskListDragAutoScroller(isActive: draggingTaskID != nil) {
+                            draggingTaskID = nil
+                        }
+                        .allowsHitTesting(false)
+                    )
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .onChange(of: viewModel.tasks.count) { oldCount, newCount in
@@ -193,12 +217,17 @@ struct TaskPanelView: View {
             onToggleLogin: onToggleLaunchAtLogin,
             onToggleOnTop: viewModel.toggleKeepOnTop,
             onToggleSound: viewModel.toggleCompletionSound,
+            onToggleMenuBarIcon: onToggleMenuBarIcon,
             onTheme: viewModel.setTheme,
             isRecordingHotKey: Binding(
                 get: { isRecordingHotKey },
                 set: { setHotKeyRecording($0) }
             ),
-            onHotKey: viewModel.setHotKey
+            onHotKey: viewModel.setHotKey,
+            isCheckingForUpdate: isCheckingForUpdate,
+            onCheckUpdate: onCheckUpdate,
+            onPreviewUpToDateAlert: onPreviewUpToDateAlert,
+            onPreviewUpdateAvailableAlert: onPreviewUpdateAvailableAlert
         )
     }
 
@@ -936,7 +965,15 @@ private struct TaskRowView: View {
                         .contentShape(Rectangle())
                         .onDrag {
                             onDragStart()
-                            return NSItemProvider(object: task.id.uuidString as NSString)
+                            let provider = NSItemProvider(object: task.id.uuidString as NSString)
+                            provider.registerDataRepresentation(
+                                forTypeIdentifier: taskRowReorderPasteboardType.rawValue,
+                                visibility: .all
+                            ) { completion in
+                                completion(Data(task.id.uuidString.utf8), nil)
+                                return nil
+                            }
+                            return provider
                         } preview: {
                             Color.clear
                                 .frame(width: 1, height: 1)
@@ -1049,6 +1086,145 @@ private struct TaskRowDropDelegate: DropDelegate {
     }
 }
 
+private struct TaskListDragAutoScroller: NSViewRepresentable {
+    let isActive: Bool
+    let onPointerReleased: () -> Void
+
+    func makeNSView(context: Context) -> AutoScrollHostView {
+        let view = AutoScrollHostView()
+        view.coordinator = context.coordinator
+        context.coordinator.hostView = view
+        return view
+    }
+
+    func updateNSView(_ nsView: AutoScrollHostView, context: Context) {
+        context.coordinator.hostView = nsView
+        context.coordinator.onPointerReleased = onPointerReleased
+        context.coordinator.setActive(isActive)
+    }
+
+    static func dismantleNSView(_ nsView: AutoScrollHostView, coordinator: Coordinator) {
+        coordinator.setActive(false)
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    final class AutoScrollHostView: NSView {
+        weak var coordinator: Coordinator?
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            coordinator?.hostView = self
+            coordinator?.refreshScrollView()
+        }
+    }
+
+    final class Coordinator {
+        weak var hostView: NSView?
+        weak var scrollView: NSScrollView?
+        var onPointerReleased: () -> Void = {}
+        private var timer: Timer?
+        private var didNotifyPointerReleased = false
+
+        private let edgeThreshold: CGFloat = 38
+        private let horizontalTrackingInset: CGFloat = 52
+        private let minimumStep: CGFloat = 3
+        private let maximumStep: CGFloat = 14
+
+        func setActive(_ isActive: Bool) {
+            if isActive {
+                startAutoScroll()
+            } else {
+                stopAutoScroll()
+            }
+        }
+
+        func refreshScrollView() {
+            scrollView = hostView?.enclosingScrollView
+        }
+
+        private func startAutoScroll() {
+            guard timer == nil else { return }
+            didNotifyPointerReleased = false
+            refreshScrollView()
+
+            let timer = Timer(timeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
+                self?.scrollIfNeeded()
+            }
+            self.timer = timer
+            RunLoop.main.add(timer, forMode: .common)
+        }
+
+        private func stopAutoScroll() {
+            timer?.invalidate()
+            timer = nil
+        }
+
+        private func scrollIfNeeded() {
+            guard isLeftMousePressed else {
+                notifyPointerReleased()
+                return
+            }
+
+            guard let scrollView = scrollView ?? hostView?.enclosingScrollView,
+                  let documentView = scrollView.documentView,
+                  let window = scrollView.window
+            else { return }
+
+            self.scrollView = scrollView
+
+            let windowPoint = window.convertPoint(fromScreen: NSEvent.mouseLocation)
+            let point = scrollView.convert(windowPoint, from: nil)
+            let bounds = scrollView.bounds
+            let horizontalTrackingRange = (bounds.minX - horizontalTrackingInset)...(bounds.maxX + horizontalTrackingInset)
+            guard horizontalTrackingRange.contains(point.x) else { return }
+
+            let topDistance = scrollView.isFlipped ? point.y - bounds.minY : bounds.maxY - point.y
+            let bottomDistance = scrollView.isFlipped ? bounds.maxY - point.y : point.y - bounds.minY
+            let direction: CGFloat
+
+            if topDistance < edgeThreshold {
+                direction = -scrollStep(for: topDistance)
+            } else if bottomDistance < edgeThreshold {
+                direction = scrollStep(for: bottomDistance)
+            } else {
+                return
+            }
+
+            let contentView = scrollView.contentView
+            let visibleRect = contentView.bounds
+            let maxY = max(0, documentView.bounds.height - visibleRect.height)
+            let documentStep = documentView.isFlipped ? direction : -direction
+            let nextY = min(max(visibleRect.origin.y + documentStep, 0), maxY)
+            guard abs(nextY - visibleRect.origin.y) > 0.5 else { return }
+
+            contentView.scroll(to: NSPoint(x: visibleRect.origin.x, y: nextY))
+            scrollView.reflectScrolledClipView(contentView)
+        }
+
+        private var isLeftMousePressed: Bool {
+            (NSEvent.pressedMouseButtons & (1 << 0)) != 0
+        }
+
+        private func notifyPointerReleased() {
+            guard !didNotifyPointerReleased else { return }
+            didNotifyPointerReleased = true
+            stopAutoScroll()
+
+            DispatchQueue.main.async { [onPointerReleased] in
+                onPointerReleased()
+            }
+        }
+
+        private func scrollStep(for distance: CGFloat) -> CGFloat {
+            let progress = max(0, min(1, (edgeThreshold - distance) / edgeThreshold))
+            return minimumStep + progress * (maximumStep - minimumStep)
+        }
+    }
+}
+
 private struct CheckboxView: View {
     let isDone: Bool
 
@@ -1116,7 +1292,7 @@ private struct QuickAddTextEditor: NSViewRepresentable {
     let onSelectionChange: (NSRange) -> Void
 
     func makeNSView(context: Context) -> NSScrollView {
-        let scrollView = NSScrollView()
+        let scrollView = QuickAddScrollView()
         scrollView.drawsBackground = false
         scrollView.borderType = .noBorder
         scrollView.hasVerticalScroller = false
@@ -1165,6 +1341,7 @@ private struct QuickAddTextEditor: NSViewRepresentable {
         textView.setExternalText(text)
 
         scrollView.documentView = textView
+        scrollView.syncDocumentLayout()
         context.coordinator.textView = textView
         return scrollView
     }
@@ -1174,7 +1351,10 @@ private struct QuickAddTextEditor: NSViewRepresentable {
         guard let textView = scrollView.documentView as? QuickAddTextView else { return }
 
         textView.placeholder = placeholder
-        textView.updateContainerWidth(scrollView.contentSize.width)
+        (scrollView as? QuickAddScrollView)?.syncDocumentLayout()
+        if scrollView.contentSize.width > 0 {
+            textView.updateContainerWidth(scrollView.contentSize.width)
+        }
         if textView.string != text {
             textView.setExternalText(text)
         }
@@ -1266,6 +1446,66 @@ private struct QuickAddTextEditor: NSViewRepresentable {
     }
 }
 
+private final class QuickAddScrollView: NSScrollView {
+    private var lastSyncedWidth: CGFloat = 0
+    private weak var lastSyncedDocumentView: NSView?
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        true
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        syncDocumentLayout()
+        guard let textView = documentView as? QuickAddTextView else {
+            super.mouseDown(with: event)
+            return
+        }
+
+        window?.makeKey()
+        window?.makeFirstResponder(textView)
+
+        let eventPoint = textView.convert(event.locationInWindow, from: nil)
+        guard textView.bounds.contains(eventPoint) else {
+            textView.setSelectedRange(NSRange(location: textView.string.utf16.count, length: 0))
+            return
+        }
+
+        super.mouseDown(with: event)
+    }
+
+    override func layout() {
+        super.layout()
+        syncDocumentLayout()
+    }
+
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        syncDocumentLayout()
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        DispatchQueue.main.async { [weak self] in
+            self?.syncDocumentLayout()
+        }
+    }
+
+    func syncDocumentLayout() {
+        let width = contentSize.width
+        guard width > 0,
+              let textView = documentView as? QuickAddTextView
+        else { return }
+
+        let documentDidChange = lastSyncedDocumentView !== textView
+        guard documentDidChange || abs(lastSyncedWidth - width) > 0.5 else { return }
+
+        lastSyncedWidth = width
+        lastSyncedDocumentView = textView
+        textView.updateContainerWidth(width)
+        textView.needsDisplay = true
+    }
+}
+
 private final class QuickAddTextView: NSTextView {
     var placeholder = ""
     var placeholderColor = NSColor.secondaryLabelColor
@@ -1276,9 +1516,22 @@ private final class QuickAddTextView: NSTextView {
     private(set) var isApplyingExternalText = false
     private var isHeightUpdateScheduled = false
     private var isMeasuringHeight = false
+    private var isFrameSizeUpdateScheduled = false
+    private var isScrollToInsertionPointScheduled = false
+    private var pendingFrameSize: NSSize?
 
     override var acceptsFirstResponder: Bool {
         true
+    }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        true
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        window?.makeKey()
+        window?.makeFirstResponder(self)
+        super.mouseDown(with: event)
     }
 
     override func keyDown(with event: NSEvent) {
@@ -1287,6 +1540,26 @@ private final class QuickAddTextView: NSTextView {
             return
         }
         super.keyDown(with: event)
+    }
+
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        guard !isTaskRowReorderDrag(sender) else { return [] }
+        return super.draggingEntered(sender)
+    }
+
+    override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
+        guard !isTaskRowReorderDrag(sender) else { return [] }
+        return super.draggingUpdated(sender)
+    }
+
+    override func prepareForDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        guard !isTaskRowReorderDrag(sender) else { return false }
+        return super.prepareForDragOperation(sender)
+    }
+
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        guard !isTaskRowReorderDrag(sender) else { return false }
+        return super.performDragOperation(sender)
     }
 
     override func insertText(_ insertString: Any, replacementRange: NSRange) {
@@ -1311,12 +1584,12 @@ private final class QuickAddTextView: NSTextView {
         isApplyingExternalText = false
         needsDisplay = true
         scheduleMeasuredHeightUpdate()
-        scrollToInsertionPoint()
+        scheduleScrollToInsertionPoint()
     }
 
     func applySelectedRange(_ range: NSRange, notifyChange: Bool = true) {
         setSelectedRange(clampedRange(range))
-        scrollToInsertionPoint()
+        scheduleScrollToInsertionPoint()
         if notifyChange {
             onSelectionChange?(selectedRange())
         }
@@ -1335,13 +1608,13 @@ private final class QuickAddTextView: NSTextView {
         onTextChange?(string)
         needsDisplay = true
         scheduleMeasuredHeightUpdate()
-        scrollToInsertionPoint()
+        scheduleScrollToInsertionPoint()
     }
 
     func updateContainerWidth(_ width: CGFloat) {
         let resolvedWidth = max(width, 1)
         if abs(frame.width - resolvedWidth) > 0.5 {
-            setFrameSize(NSSize(width: resolvedWidth, height: max(frame.height, quickAddMinTextHeight)))
+            scheduleFrameSizeUpdate(width: resolvedWidth, height: max(frame.height, quickAddMinTextHeight))
         }
         textContainer?.containerSize = NSSize(width: resolvedWidth, height: .greatestFiniteMagnitude)
         scheduleMeasuredHeightUpdate()
@@ -1372,12 +1645,28 @@ private final class QuickAddTextView: NSTextView {
         let usedRect = layoutManager.usedRect(for: textContainer)
         let contentHeight = max(quickAddMinTextHeight, ceil(usedRect.height + textContainerInset.height * 2))
         if abs(frame.height - contentHeight) > 0.5 {
-            setFrameSize(NSSize(width: availableWidth, height: contentHeight))
+            scheduleFrameSizeUpdate(width: availableWidth, height: contentHeight)
         }
 
         let visibleHeight = min(max(contentHeight, quickAddMinTextHeight), quickAddMaxTextHeight)
         updateScrollIndicatorVisibility(contentHeight: contentHeight)
         onHeightChange?(visibleHeight)
+    }
+
+    private func scheduleFrameSizeUpdate(width: CGFloat, height: CGFloat) {
+        pendingFrameSize = NSSize(width: width, height: height)
+        guard !isFrameSizeUpdateScheduled else { return }
+        isFrameSizeUpdateScheduled = true
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.isFrameSizeUpdateScheduled = false
+            guard let size = self.pendingFrameSize else { return }
+            self.pendingFrameSize = nil
+            guard abs(self.frame.width - size.width) > 0.5 || abs(self.frame.height - size.height) > 0.5 else { return }
+            self.setFrameSize(size)
+            self.scheduleMeasuredHeightUpdate()
+        }
     }
 
     private func updateScrollIndicatorVisibility(contentHeight: CGFloat) {
@@ -1392,6 +1681,17 @@ private final class QuickAddTextView: NSTextView {
         guard enclosingScrollView != nil else { return }
         let caretLocation = min(selectedRange().location, string.utf16.count)
         scrollRangeToVisible(NSRange(location: caretLocation, length: 0))
+    }
+
+    private func scheduleScrollToInsertionPoint() {
+        guard !isScrollToInsertionPointScheduled else { return }
+        isScrollToInsertionPointScheduled = true
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.isScrollToInsertionPointScheduled = false
+            self.scrollToInsertionPoint()
+        }
     }
 
     private func clampedRange(_ range: NSRange) -> NSRange {
@@ -1737,7 +2037,7 @@ private struct DeleteAllConfirmView: View {
     }
 }
 
-private struct ModalActionButton: View {
+struct ModalActionButton: View {
     let title: String
     let font: Font
     let foreground: Color
@@ -1770,17 +2070,20 @@ private struct ModalActionButton: View {
 }
 
 private struct SettingsPanelView: View {
-    private static let feedbackURL = URL(string: "https://docs.google.com/forms/d/e/1FAIpQLSdjJzn9EhJdAtv8fqYKtTJnfdCpFq27B5F9sVvplzm2W9aKxQ/viewform")
-
     let settings: TaskPanelSettings
     let onBack: () -> Void
     let onCollapse: () -> Void
     let onToggleLogin: () -> Void
     let onToggleOnTop: () -> Void
     let onToggleSound: () -> Void
+    let onToggleMenuBarIcon: () -> Void
     let onTheme: (TaskPanelSettings.Theme) -> Void
     @Binding var isRecordingHotKey: Bool
     let onHotKey: (TaskPanelHotKey) -> Void
+    let isCheckingForUpdate: Bool
+    let onCheckUpdate: () -> Void
+    let onPreviewUpToDateAlert: () -> Void
+    let onPreviewUpdateAvailableAlert: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -1816,6 +2119,8 @@ private struct SettingsPanelView: View {
                         SettingsDivider()
                         SettingsToggleRow(title: "항상 위에 표시", subtitle: "언제나 다른 창에 가려지지 않아요!", isOn: settings.keepOnTop, action: onToggleOnTop)
                         SettingsDivider()
+                        SettingsToggleRow(title: "메뉴바 아이콘 표시", subtitle: "상단 메뉴바에서 Noto 상태를 확인해요.", isOn: settings.showsMenuBarIcon, action: onToggleMenuBarIcon)
+                        SettingsDivider()
                         SettingsToggleRow(title: "완료 효과음", isOn: settings.completionSound, action: onToggleSound)
                     }
 
@@ -1830,15 +2135,19 @@ private struct SettingsPanelView: View {
                         .padding(.top, 13)
 
                     SupportSectionView(
+                        isCheckingForUpdate: isCheckingForUpdate,
+                        onCheckUpdate: onCheckUpdate,
                         onFeedback: openFeedbackForm,
                         onShare: openAppStorePage,
-                        onRate: openAppStoreReview
+                        onRate: openAppStoreReview,
+                        onPreviewUpToDateAlert: onPreviewUpToDateAlert,
+                        onPreviewUpdateAvailableAlert: onPreviewUpdateAvailableAlert
                     )
                     .padding(.top, 17)
 
                     HStack {
                         Spacer()
-                        Text("version 1.0.0")
+                        Text(AppVersionService.current.settingsDisplayText)
                     }
                     .font(DesignTokens.Typography.settingsMeta)
                     .foregroundStyle(DesignTokens.Colors.textMuted)
@@ -1853,7 +2162,7 @@ private struct SettingsPanelView: View {
     }
 
     private func openFeedbackForm() {
-        guard let feedbackURL = Self.feedbackURL else {
+        guard let feedbackURL = NotoSupportLink.feedbackForm else {
             NSSound.beep()
             return
         }
@@ -1862,7 +2171,7 @@ private struct SettingsPanelView: View {
     }
 
     private func openAppStorePage() {
-        guard let appPageURL = NotoAppStoreLink.appPage else {
+        guard let appPageURL = NotoSupportLink.appPage else {
             NSSound.beep()
             return
         }
@@ -1871,12 +2180,12 @@ private struct SettingsPanelView: View {
     }
 
     private func openAppStoreReview() {
-        guard let reviewURL = NotoAppStoreLink.writeReview else {
+        guard let reviewURL = NotoSupportLink.writeReview else {
             NSSound.beep()
             return
         }
 
-        if !NSWorkspace.shared.open(reviewURL), let fallbackURL = NotoAppStoreLink.webWriteReview {
+        if !NSWorkspace.shared.open(reviewURL), let fallbackURL = NotoSupportLink.webWriteReview {
             NSWorkspace.shared.open(fallbackURL)
         }
     }
@@ -2150,9 +2459,13 @@ private final class HotKeyRecorderNSView: NSView {
 }
 
 private struct SupportSectionView: View {
+    let isCheckingForUpdate: Bool
+    let onCheckUpdate: () -> Void
     let onFeedback: () -> Void
     let onShare: () -> Void
     let onRate: () -> Void
+    let onPreviewUpToDateAlert: () -> Void
+    let onPreviewUpdateAvailableAlert: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 11) {
@@ -2160,6 +2473,17 @@ private struct SupportSectionView: View {
 
             SettingsSectionLabel(title: "지원", meta: "SUPPORT")
                 .padding(.top, 6)
+
+            SupportActionRow(title: "업데이트 확인", action: onCheckUpdate) {
+                if isCheckingForUpdate {
+                    ProgressView()
+                        .controlSize(.small)
+                        .scaleEffect(0.62)
+                } else {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                }
+            }
+            .disabled(isCheckingForUpdate)
 
             SupportActionRow(title: "문의 및 피드백", systemName: "arrow.up.right.square", action: onFeedback)
             SupportActionRow(title: "앱 공유하기", systemName: "square.and.arrow.up", action: onShare)
@@ -2172,9 +2496,36 @@ private struct SupportSectionView: View {
                 }
                 .foregroundStyle(DesignTokens.Colors.rating)
             }
+
+            #if DEBUG
+            UpdateAlertPreviewSection(
+                onPreviewUpToDateAlert: onPreviewUpToDateAlert,
+                onPreviewUpdateAvailableAlert: onPreviewUpdateAvailableAlert
+            )
+            .padding(.top, 4)
+            #endif
         }
     }
 }
+
+#if DEBUG
+private struct UpdateAlertPreviewSection: View {
+    let onPreviewUpToDateAlert: () -> Void
+    let onPreviewUpdateAvailableAlert: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SettingsDivider()
+
+            SettingsSectionLabel(title: "업데이트 미리보기", meta: "DEBUG")
+                .padding(.top, 2)
+
+            SupportActionRow(title: "최신 버전 알럿 보기", systemName: "checkmark.circle", action: onPreviewUpToDateAlert)
+            SupportActionRow(title: "업데이트 알럿 보기", systemName: "arrow.down.circle", action: onPreviewUpdateAvailableAlert)
+        }
+    }
+}
+#endif
 
 private struct SettingsSectionLabel: View {
     let title: String
@@ -2236,7 +2587,15 @@ private struct SupportActionRow<Trailing: View>: View {
         onQuickAddMic: {},
         onQuickAddSubmit: {},
         onToggleLaunchAtLogin: {},
-        onHotKeyRecordingChange: { _ in }
+        onToggleMenuBarIcon: {},
+        onHotKeyRecordingChange: { _ in },
+        isCheckingForUpdate: false,
+        updateCheckAlert: nil,
+        onCheckUpdate: {},
+        onDismissUpdateAlert: {},
+        onOpenUpdateStore: { _ in },
+        onPreviewUpToDateAlert: {},
+        onPreviewUpdateAvailableAlert: {}
     )
         .padding(40)
         .background(DesignTokens.Colors.documentBackground)

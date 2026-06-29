@@ -10,11 +10,13 @@ enum DesignTokens {
     enum Colors {
         static let panelSurface = Color(light: 0xF9F7F2, dark: 0x201F1C)
 
-        static let characterTop = Color(light: 0xFFFEFB, dark: 0xFFFEFB)
-        static let characterMid = Color(light: 0xF4F0E7, dark: 0xF4F0E7)
-        static let characterBottom = Color(light: 0xECE5D8, dark: 0xECE5D8)
-        static let characterInk = Color(hex: 0x2A2823)
-        static let characterHairline = Color(hex: 0x2A2823, opacity: 0.07)
+        static let characterTop = Color(light: 0xFFFEFB, dark: 0xB6B0A4)
+        static let characterMid = Color(light: 0xF4F0E7, dark: 0x9A927F)
+        static let characterBottom = Color(light: 0xECE5D8, dark: 0x746C5F)
+        static let characterInk = Color(light: 0x2A2823, dark: 0x201F1C)
+        static let characterHairline = Color(light: 0x2A2823, dark: 0x201F1C, lightOpacity: 0.07, darkOpacity: 0.18)
+        static let characterHighlight = Color(light: 0xFFFFFF, dark: 0xFFFFFF, lightOpacity: 0.55, darkOpacity: 0.18)
+        static let characterLens = Color(light: 0xFFFFFF, dark: 0xECE7DC, lightOpacity: 0.16, darkOpacity: 0.16)
 
         static let textPrimary = Color(light: 0x2A2823, dark: 0xECE7DC)
         static let textSecondary = Color(light: 0x5A554B, dark: 0xB6B0A4)

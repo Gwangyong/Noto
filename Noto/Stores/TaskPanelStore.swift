@@ -39,6 +39,7 @@ final class TaskPanelStore {
                 launchAtLogin: preference.launchAtLogin,
                 keepOnTop: preference.keepOnTop,
                 completionSound: preference.completionSound,
+                showsMenuBarIcon: preference.showsMenuBarIcon,
                 theme: preference.theme,
                 hotKey: preference.hotKey
             )
@@ -54,6 +55,7 @@ final class TaskPanelStore {
         preference.launchAtLogin = snapshot.settings.launchAtLogin
         preference.keepOnTop = snapshot.settings.keepOnTop
         preference.completionSound = snapshot.settings.completionSound
+        preference.showsMenuBarIcon = snapshot.settings.showsMenuBarIcon
         preference.theme = snapshot.settings.theme
         preference.hotKey = snapshot.settings.hotKey
         preference.updatedAt = .now
@@ -123,6 +125,7 @@ final class TaskPanelStore {
             launchAtLogin: settings.launchAtLogin,
             keepOnTop: settings.keepOnTop,
             completionSound: settings.completionSound,
+            showsMenuBarIcon: settings.showsMenuBarIcon,
             theme: settings.theme,
             hotKey: settings.hotKey
         )

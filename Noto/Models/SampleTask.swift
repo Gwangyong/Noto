@@ -27,6 +27,7 @@ struct TaskPanelSettings: Equatable {
     var launchAtLogin: Bool
     var keepOnTop: Bool
     var completionSound: Bool
+    var showsMenuBarIcon: Bool
     var theme: Theme
     var hotKey: TaskPanelHotKey
 

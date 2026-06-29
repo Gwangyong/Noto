@@ -12,6 +12,7 @@ final class AppPreference {
     var launchAtLogin: Bool
     var keepOnTop: Bool
     var completionSound: Bool
+    var showsMenuBarIcon: Bool = true
     var themeRawValue: String
     var hotKeyKeyCode: Int?
     var hotKeyModifiers: Int?
@@ -24,6 +25,7 @@ final class AppPreference {
         launchAtLogin: Bool = true,
         keepOnTop: Bool = true,
         completionSound: Bool = false,
+        showsMenuBarIcon: Bool = true,
         theme: TaskPanelSettings.Theme = .system,
         hotKey: TaskPanelHotKey = .default,
         characterOriginX: Double? = nil,
@@ -34,6 +36,7 @@ final class AppPreference {
         self.launchAtLogin = launchAtLogin
         self.keepOnTop = keepOnTop
         self.completionSound = completionSound
+        self.showsMenuBarIcon = showsMenuBarIcon
         self.themeRawValue = theme.rawValue
         self.hotKeyKeyCode = hotKey.keyCodeValue
         self.hotKeyModifiers = hotKey.modifierValue

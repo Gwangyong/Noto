@@ -71,7 +71,7 @@ struct FloatingCharacterView: View {
                 )
                 .overlay {
                     NotoCharacterBlobShape()
-                        .stroke(Color.white.opacity(0.55), lineWidth: 1)
+                        .stroke(DesignTokens.Colors.characterHighlight, lineWidth: 1)
                         .blendMode(.screen)
                 }
                 .overlay {
@@ -113,7 +113,7 @@ struct FloatingCharacterView: View {
     private var glasses: some View {
         HStack(spacing: 0) {
             Circle()
-                .fill(Color.white.opacity(0.16))
+                .fill(DesignTokens.Colors.characterLens)
                 .overlay(
                     Circle()
                         .stroke(DesignTokens.Colors.characterInk, lineWidth: 1.7)
@@ -125,7 +125,7 @@ struct FloatingCharacterView: View {
                 .frame(width: 4, height: 1.7)
 
             Circle()
-                .fill(Color.white.opacity(0.16))
+                .fill(DesignTokens.Colors.characterLens)
                 .overlay(
                     Circle()
                         .stroke(DesignTokens.Colors.characterInk, lineWidth: 1.7)
