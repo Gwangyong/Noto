@@ -65,6 +65,7 @@ final class TaskPanelViewModel: ObservableObject {
                 keepOnTop: true,
                 completionSound: false,
                 showsMenuBarIcon: true,
+                characterKind: .noto,
                 theme: .system,
                 hotKey: .default
             )
@@ -218,6 +219,12 @@ final class TaskPanelViewModel: ObservableObject {
     func setTheme(_ theme: TaskPanelSettings.Theme) {
         guard settings.theme != theme else { return }
         settings.theme = theme
+        persistSnapshot()
+    }
+
+    func setCharacterKind(_ characterKind: FloatingCharacterKind) {
+        guard settings.characterKind != characterKind else { return }
+        settings.characterKind = characterKind
         persistSnapshot()
     }
 

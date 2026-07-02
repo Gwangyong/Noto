@@ -13,6 +13,7 @@ final class AppPreference {
     var keepOnTop: Bool
     var completionSound: Bool
     var showsMenuBarIcon: Bool = true
+    var characterKindRawValue: String?
     var themeRawValue: String
     var hotKeyKeyCode: Int?
     var hotKeyModifiers: Int?
@@ -26,6 +27,7 @@ final class AppPreference {
         keepOnTop: Bool = true,
         completionSound: Bool = false,
         showsMenuBarIcon: Bool = true,
+        characterKind: FloatingCharacterKind = .noto,
         theme: TaskPanelSettings.Theme = .system,
         hotKey: TaskPanelHotKey = .default,
         characterOriginX: Double? = nil,
@@ -37,6 +39,7 @@ final class AppPreference {
         self.keepOnTop = keepOnTop
         self.completionSound = completionSound
         self.showsMenuBarIcon = showsMenuBarIcon
+        self.characterKindRawValue = characterKind.rawValue
         self.themeRawValue = theme.rawValue
         self.hotKeyKeyCode = hotKey.keyCodeValue
         self.hotKeyModifiers = hotKey.modifierValue
@@ -51,6 +54,17 @@ final class AppPreference {
         }
         set {
             themeRawValue = newValue.rawValue
+            updatedAt = .now
+        }
+    }
+
+    var characterKind: FloatingCharacterKind {
+        get {
+            guard let characterKindRawValue else { return .noto }
+            return FloatingCharacterKind(rawValue: characterKindRawValue) ?? .noto
+        }
+        set {
+            characterKindRawValue = newValue.rawValue
             updatedAt = .now
         }
     }

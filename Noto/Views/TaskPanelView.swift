@@ -219,6 +219,7 @@ struct TaskPanelView: View {
             onToggleSound: viewModel.toggleCompletionSound,
             onToggleMenuBarIcon: onToggleMenuBarIcon,
             onTheme: viewModel.setTheme,
+            onCharacterKind: viewModel.setCharacterKind,
             isRecordingHotKey: Binding(
                 get: { isRecordingHotKey },
                 set: { setHotKeyRecording($0) }
@@ -2078,6 +2079,7 @@ private struct SettingsPanelView: View {
     let onToggleSound: () -> Void
     let onToggleMenuBarIcon: () -> Void
     let onTheme: (TaskPanelSettings.Theme) -> Void
+    let onCharacterKind: (FloatingCharacterKind) -> Void
     @Binding var isRecordingHotKey: Bool
     let onHotKey: (TaskPanelHotKey) -> Void
     let isCheckingForUpdate: Bool
@@ -2126,6 +2128,9 @@ private struct SettingsPanelView: View {
 
                     ThemePickerRow(selectedTheme: settings.theme, onTheme: onTheme)
                         .padding(.top, 8)
+
+                    CharacterPickerRow(selectedKind: settings.characterKind, onCharacterKind: onCharacterKind)
+                        .padding(.top, 13)
 
                     ShortcutSettingRow(
                         hotKey: settings.hotKey,
@@ -2297,6 +2302,70 @@ private struct ThemePickerRow: View {
     private func themeBackground(for theme: TaskPanelSettings.Theme) -> some View {
         Group {
             if theme == selectedTheme {
+                RoundedRectangle(cornerRadius: DesignTokens.Radius.md, style: .continuous)
+                    .fill(DesignTokens.Colors.segmentSelectedSurface)
+                    .shadow(color: Color.black.opacity(0.08), radius: 4, x: 0, y: 1)
+            } else {
+                RoundedRectangle(cornerRadius: DesignTokens.Radius.md, style: .continuous)
+                    .fill(Color.clear)
+            }
+        }
+    }
+}
+
+private struct CharacterPickerRow: View {
+    let selectedKind: FloatingCharacterKind
+    let onCharacterKind: (FloatingCharacterKind) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            SettingsSectionLabel(title: "캐릭터", meta: "CHARACTER")
+
+            HStack(spacing: 6) {
+                ForEach(FloatingCharacterKind.allCases) { kind in
+                    Button(action: { onCharacterKind(kind) }) {
+                        VStack(spacing: 4) {
+                            FloatingCharacterArtwork(
+                                characterKind: kind,
+                                isActive: false,
+                                metrics: .preview
+                            )
+                            .frame(width: DesignTokens.Size.characterSize, height: DesignTokens.Size.characterSize)
+                            .scaleEffect(0.55)
+                            .frame(width: 32, height: 32)
+
+                            Text(kind.displayName)
+                                .font(DesignTokens.Typography.sans(size: 9.5, weight: kind == selectedKind ? .semibold : .regular))
+                                .foregroundStyle(kind == selectedKind ? DesignTokens.Colors.textPrimary : DesignTokens.Colors.textSecondary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.82)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 52)
+                        .background(characterBackground(for: kind))
+                        .contentShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.md, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(kind.accessibilityName)
+                    .accessibilityValue(kind == selectedKind ? "선택됨" : "선택 안 됨")
+                }
+            }
+            .padding(3)
+            .background(
+                RoundedRectangle(cornerRadius: DesignTokens.Radius.lg, style: .continuous)
+                    .fill(DesignTokens.Colors.segmentControlSurface)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: DesignTokens.Radius.lg, style: .continuous)
+                    .stroke(DesignTokens.Colors.hairline.opacity(0.8), lineWidth: 0.7)
+            )
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func characterBackground(for kind: FloatingCharacterKind) -> some View {
+        Group {
+            if kind == selectedKind {
                 RoundedRectangle(cornerRadius: DesignTokens.Radius.md, style: .continuous)
                     .fill(DesignTokens.Colors.segmentSelectedSurface)
                     .shadow(color: Color.black.opacity(0.08), radius: 4, x: 0, y: 1)

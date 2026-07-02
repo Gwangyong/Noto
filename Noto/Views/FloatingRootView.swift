@@ -74,6 +74,7 @@ struct FloatingRootView: View {
 
             FloatingCharacterView(
                 remainingCount: viewModel.remainingCount,
+                characterKind: viewModel.settings.characterKind,
                 isActive: isPanelOpen,
                 isDragging: dragStartOrigin != nil,
                 isPressed: isPressing
